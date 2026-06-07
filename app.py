@@ -11,6 +11,7 @@ import shutil
 from werkzeug.utils import secure_filename
 from functools import wraps
 import logging
+import sys
 
 app = Flask(__name__)
 app.secret_key = 'secret_key_for_zetta_12345'
@@ -746,1429 +747,7 @@ OFFICE_COORDINATES = {
 }
 
 
-# СТРАНИЦА "САЙТ НЕДОСТУПЕН" (503 ошибка)
-@app.errorhandler(503)
-def service_unavailable(e):
-    return render_template_string('''
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <meta charset="UTF-8">
-        <title>Сайт временно недоступен</title>
-        <style>
-            * {
-                margin: 0;
-                padding: 0;
-                box-sizing: border-box;
-            }
-            body {
-                background: linear-gradient(135deg, #0a0a0a 0%, #1a0a0a 100%);
-                display: flex;
-                justify-content: center;
-                align-items: center;
-                min-height: 100vh;
-                font-family: 'Segoe UI', Arial, sans-serif;
-            }
-            .error-container {
-                text-align: center;
-                animation: fadeInUp 0.8s ease-out;
-            }
-            @keyframes fadeInUp {
-                from {
-                    opacity: 0;
-                    transform: translateY(30px);
-                }
-                to {
-                    opacity: 1;
-                    transform: translateY(0);
-                }
-            }
-            @keyframes pulse {
-                0% { transform: scale(1); }
-                50% { transform: scale(1.05); }
-                100% { transform: scale(1); }
-            }
-            @keyframes shake {
-                0%, 100% { transform: translateX(0); }
-                25% { transform: translateX(-5px); }
-                75% { transform: translateX(5px); }
-            }
-            .triangle {
-                width: 0;
-                height: 0;
-                border-left: 80px solid transparent;
-                border-right: 80px solid transparent;
-                border-bottom: 140px solid #e74c3c;
-                margin: 0 auto 2rem;
-                position: relative;
-                animation: pulse 2s ease-in-out infinite;
-            }
-            .triangle::before {
-                content: "!";
-                position: absolute;
-                top: 50%;
-                left: 50%;
-                transform: translate(-50%, -50%);
-                font-size: 5rem;
-                font-weight: bold;
-                color: white;
-                text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
-            }
-            .triangle:hover {
-                animation: shake 0.5s ease-in-out;
-            }
-            .error-text {
-                font-size: 2rem;
-                font-weight: 500;
-                color: #e74c3c;
-                margin-bottom: 1rem;
-                letter-spacing: 2px;
-            }
-            .error-message {
-                color: #888;
-                font-size: 1.1rem;
-                margin-bottom: 2rem;
-            }
-            .error-message span {
-                color: #27ae60;
-                font-weight: bold;
-            }
-            .logo {
-                margin-top: 2rem;
-                font-size: 1rem;
-                color: #555;
-                letter-spacing: 2px;
-            }
-            .logo span {
-                color: #27ae60;
-                font-weight: bold;
-            }
-        </style>
-    </head>
-    <body>
-        <div class="error-container">
-            <div class="triangle"></div>
-            <div class="error-text">САЙТ ВРЕМЕННО НЕ ДОСТУПЕН</div>
-            <div class="error-message">
-                Приносим свои извинения, ведутся технические работы.<br>
-                Скоро мы вернёмся!<br><br>
-                С уважением, команда <span>ZETTA</span>
-            </div>
-            <div class="logo">
-                <span>⚡ ZETTA</span> — Профессиональная сборка ПК и IT-услуги
-            </div>
-        </div>
-    </body>
-    </html>
-    ''', 503)
-
-
-# СТРАНИЦА БАНА
-@app.route('/ban-page')
-def ban_page():
-    email = request.args.get('email', '')
-    ban_info = get_ban_info(email)
-    if ban_info:
-        return render_template_string('''
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <meta charset="UTF-8">
-            <title>Аккаунт заблокирован</title>
-            <style>
-                * {
-                    margin: 0;
-                    padding: 0;
-                    box-sizing: border-box;
-                }
-                body {
-                    background: linear-gradient(135deg, #0a0a0a 0%, #1a0a0a 100%);
-                    display: flex;
-                    justify-content: center;
-                    align-items: center;
-                    min-height: 100vh;
-                    font-family: 'Segoe UI', Arial, sans-serif;
-                }
-                .ban-container {
-                    background: #1a1a1a;
-                    border: 1px solid #e74c3c;
-                    border-radius: 16px;
-                    padding: 2.5rem;
-                    max-width: 500px;
-                    margin: 20px;
-                    text-align: center;
-                    animation: fadeInUp 0.6s ease-out;
-                    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-                }
-                @keyframes fadeInUp {
-                    from {
-                        opacity: 0;
-                        transform: translateY(30px);
-                    }
-                    to {
-                        opacity: 1;
-                        transform: translateY(0);
-                    }
-                }
-                @keyframes pulse {
-                    0% { transform: scale(1); }
-                    50% { transform: scale(1.05); }
-                    100% { transform: scale(1); }
-                }
-                .ban-icon {
-                    font-size: 4rem;
-                    margin-bottom: 1rem;
-                    animation: pulse 1.5s ease-in-out infinite;
-                }
-                .ban-title {
-                    font-size: 1.8rem;
-                    font-weight: bold;
-                    color: #e74c3c;
-                    margin-bottom: 1rem;
-                }
-                .ban-subtitle {
-                    color: #888;
-                    margin-bottom: 1.5rem;
-                    font-size: 0.9rem;
-                }
-                .ban-info {
-                    background: #0f0f0f;
-                    border-radius: 12px;
-                    padding: 1.5rem;
-                    text-align: left;
-                    margin-bottom: 1.5rem;
-                    border-left: 4px solid #e74c3c;
-                }
-                .ban-info p {
-                    margin: 0.5rem 0;
-                    color: #bbb;
-                }
-                .ban-info strong {
-                    color: #27ae60;
-                }
-                .ban-reason {
-                    background: #2a1a1a;
-                    padding: 0.8rem;
-                    border-radius: 8px;
-                    margin: 0.5rem 0;
-                    color: #e74c3c;
-                    font-weight: bold;
-                }
-                .ban-message {
-                    background: #1a2a1a;
-                    padding: 0.8rem;
-                    border-radius: 8px;
-                    margin: 0.5rem 0;
-                    color: #27ae60;
-                    font-style: italic;
-                }
-                .ban-date {
-                    color: #f39c12;
-                    font-weight: bold;
-                }
-                .contact-link {
-                    color: #27ae60;
-                    text-decoration: none;
-                    font-weight: bold;
-                    transition: all 0.3s ease;
-                }
-                .contact-link:hover {
-                    text-decoration: underline;
-                    color: #229954;
-                }
-                .back-btn {
-                    background: #27ae60;
-                    color: white;
-                    border: none;
-                    padding: 0.8rem 1.5rem;
-                    border-radius: 8px;
-                    cursor: pointer;
-                    font-size: 1rem;
-                    margin-top: 1rem;
-                    transition: all 0.3s ease;
-                }
-                .back-btn:hover {
-                    background: #229954;
-                    transform: scale(1.02);
-                }
-            </style>
-        </head>
-        <body>
-            <div class="ban-container">
-                <div class="ban-icon">🚫</div>
-                <div class="ban-title">ДОСТУП ЗАБЛОКИРОВАН</div>
-                <div class="ban-subtitle">Ваш аккаунт был заблокирован администрацией</div>
-
-                <div class="ban-info">
-                    <p><strong>📅 Дата блокировки:</strong> <span class="ban-date">До {{ ban_until }}</span></p>
-                    <p><strong>⚠️ Причина блокировки:</strong></p>
-                    <div class="ban-reason">{{ reason }}</div>
-                    <p><strong>💬 Сообщение от администратора:</strong></p>
-                    <div class="ban-message">{{ message }}</div>
-                </div>
-
-                <p style="color: #888; font-size: 0.85rem;">
-                    Если вы считаете, что это ошибка, свяжитесь с нами по почте 
-                    <a href="mailto:zetta_report@zetta22.ru" class="contact-link">zetta_report@zetta22.ru</a>
-                </p>
-
-                <button class="back-btn" onclick="window.location.href='/'">🔙 Вернуться на главную</button>
-            </div>
-        </body>
-        </html>
-        ''', ban_until=ban_info['ban_until'], reason=ban_info['reason'], message=ban_info['message'])
-    return redirect('/')
-
-
-# БЛОКИРОВКА ПРИ БАНЕ
-@app.before_request
-def check_ban():
-    if request.endpoint == 'static':
-        return None
-
-    if request.endpoint == 'ban_page':
-        return None
-
-    if 'user_email' in session:
-        is_banned, ban_until, ban_reason, ban_message = is_user_banned(session['user_email'])
-        if is_banned:
-            session.clear()
-            return redirect(f'/ban-page?email={session["user_email"]}')
-
-
-# ==================== API МАРШРУТЫ ДЛЯ ЧАТА-ПОМОЩНИКА ====================
-
-@app.route('/api/chat/send-operator-request', methods=['POST'])
-def send_operator_request():
-    if 'user_email' not in session:
-        return jsonify({'success': False, 'message': 'Не авторизован'}), 401
-
-    users = load_users()
-    user = users.get(session['user_email'], {})
-    user_name = user.get('full_name', 'Не указано')
-    user_phone = user.get('phone', 'Не указан')
-    user_email = session['user_email']
-
-    email_sent = send_operator_request_email(user_name, user_phone, user_email)
-
-    return jsonify({
-        'success': True,
-        'message': '✅ Заявка отправлена! Оператор свяжется с вами в ближайшее время.',
-        'email_sent': email_sent
-    })
-
-
-@app.route('/api/chat/send-payment-question', methods=['POST'])
-def send_payment_question():
-    if 'user_email' not in session:
-        return jsonify({'success': False, 'message': 'Не авторизован'}), 401
-
-    auto_response = "Доброго времени суток, наш дорогой клиент! В данный момент оплата принимается только за наличный расчёт или же перевод на карту. Онлайн оплата скоро появится. ЖДИТЕ НАШИХ НОВОСТЕЙ!"
-
-    return jsonify({
-        'success': True,
-        'response': auto_response
-    })
-
-
-@app.route('/api/chat/site-creation-time', methods=['POST'])
-def site_creation_time():
-    if 'user_email' not in session:
-        return jsonify({'success': False, 'message': 'Не авторизован'}), 401
-
-    response = "В среднем создание сайта уходит 1-2 недели, но если сайт не содержит в себе сложных элементов, то создание такого проекта сокращается вдвое!"
-
-    return jsonify({
-        'success': True,
-        'response': response
-    })
-
-
-@app.route('/api/chat/consultation', methods=['POST'])
-def consultation():
-    if 'user_email' not in session:
-        return jsonify({'success': False, 'message': 'Не авторизован'}), 401
-
-    data = request.json
-    choice = data.get('choice')
-
-    phones = {
-        'system_admin': '89836074115',
-        'director': '89520062357',
-        'manager': '89132447707'
-    }
-
-    names = {
-        'system_admin': 'Системный администратор',
-        'director': 'Генеральный директор',
-        'manager': 'Менеджер'
-    }
-
-    if choice in phones:
-        response = f"{names[choice]}: {phones[choice]}"
-    else:
-        response = "Пожалуйста, выберите одного из специалистов: Системный администратор, Генеральный директор или Менеджер."
-
-    return jsonify({
-        'success': True,
-        'response': response
-    })
-
-
-@app.route('/api/chat/cooperation', methods=['POST'])
-def cooperation():
-    if 'user_email' not in session:
-        return jsonify({'success': False, 'message': 'Не авторизован'}), 401
-
-    response = "По вопросам рекламы и сотрудничества пишите нам на почту zetta_report@zetta22.ru или можете позвонить по номеру телефона 89520062357."
-
-    return jsonify({
-        'success': True,
-        'response': response
-    })
-
-
-# ==================== API ДЛЯ ВЛОГА И ПРЕДЛОЖЕНИЙ ====================
-
-@app.route('/api/vlog', methods=['GET'])
-def get_vlog():
-    vlog = load_vlog()
-    return jsonify(vlog)
-
-
-@app.route('/api/admin/update-vlog', methods=['POST'])
-def update_vlog():
-    if 'user_email' not in session or not is_admin(session['user_email']):
-        return jsonify({'error': 'Access denied'}), 403
-
-    data = request.json
-    text = data.get('text', '')
-
-    vlog = load_vlog()
-    vlog['text'] = text
-    save_vlog(vlog)
-
-    return jsonify({'success': True, 'message': 'Влог обновлён'})
-
-
-@app.route('/api/send-feedback', methods=['POST'])
-def send_feedback():
-    if 'user_email' not in session:
-        return jsonify({'success': False, 'message': 'Не авторизован'}), 401
-
-    data = request.json
-    message = data.get('message', '')
-
-    if not message:
-        return jsonify({'success': False, 'message': 'Введите сообщение'})
-
-    users = load_users()
-    user = users.get(session['user_email'], {})
-    user_name = user.get('full_name', 'Не указано')
-    user_phone = user.get('phone', 'Не указан')
-    user_email = session['user_email']
-
-    try:
-        msg = MIMEMultipart()
-        msg['From'] = EMAIL_CONFIG['email']
-        msg['To'] = EMAIL_CONFIG['email']
-        msg['Subject'] = f'ПРЕДЛОЖЕНИЕ/ЖАЛОБА от {user_name}'
-
-        html_content = f'''
-        <!DOCTYPE html>
-        <html>
-        <head><meta charset="UTF-8"></head>
-        <body style="font-family: Arial, sans-serif;">
-            <h1 style="color: #e74c3c;">📬 НОВОЕ СООБЩЕНИЕ ОТ ПОЛЬЗОВАТЕЛЯ</h1>
-            <hr>
-            <p><strong>👤 Отправитель:</strong> {user_name}</p>
-            <p><strong>📧 Email:</strong> {user_email}</p>
-            <p><strong>📱 Телефон:</strong> {user_phone}</p>
-            <p><strong>⏰ Время отправки:</strong> {datetime.now().strftime('%d.%m.%Y %H:%M:%S')}</p>
-            <hr>
-            <p><strong>💬 Сообщение:</strong></p>
-            <div style="background: #f0f0f0; padding: 1rem; border-radius: 8px; margin-top: 0.5rem;">
-                {message.replace(chr(10), '<br>')}
-            </div>
-            <hr>
-            <p style="color: #888;">Сообщение отправлено через форму на сайте Zetta</p>
-        </body>
-        </html>
-        '''
-
-        msg.attach(MIMEText(html_content, 'html', 'utf-8'))
-
-        server = smtplib.SMTP_SSL(EMAIL_CONFIG['smtp_server'], EMAIL_CONFIG['smtp_port'])
-        server.login(EMAIL_CONFIG['email'], EMAIL_CONFIG['password'])
-        server.send_message(msg)
-        server.quit()
-
-        return jsonify({'success': True, 'message': 'Сообщение отправлено! Спасибо за обратную связь.'})
-    except Exception as e:
-        print(f"Ошибка отправки: {e}")
-        return jsonify({'success': False, 'message': 'Ошибка при отправке. Попробуйте позже.'})
-
-
-# ==================== API МАРШРУТЫ ДЛЯ АВТОРИЗАЦИИ ====================
-
-@app.route('/api/auth/status', methods=['GET'])
-def auth_status():
-    if 'user_email' in session:
-        is_banned, ban_until, ban_reason, ban_message = is_user_banned(session['user_email'])
-        if is_banned:
-            session.clear()
-            return jsonify({'logged_in': False, 'is_admin': False, 'banned': True})
-
-        users = load_users()
-        user = users.get(session['user_email'], {})
-        return jsonify({
-            'logged_in': True,
-            'user': {
-                'full_name': user.get('full_name', ''),
-                'email': user.get('email', ''),
-                'phone': user.get('phone', ''),
-                'registered_at': user.get('registered_at', '')
-            },
-            'is_admin': user.get('is_admin', False)
-        })
-    return jsonify({'logged_in': False, 'is_admin': False})
-
-
-@app.route('/api/auth/login', methods=['POST'])
-def api_login():
-    data = request.json
-    success, message = login_user(data.get('email'), data.get('password'))
-    return jsonify({'success': success, 'message': message})
-
-
-@app.route('/api/auth/logout', methods=['POST'])
-def api_logout():
-    session.pop('user_email', None)
-    session.pop('user_name', None)
-    session.pop('is_admin', None)
-    return jsonify({'success': True})
-
-
-@app.route('/api/check-profile-complete', methods=['GET'])
-def check_profile_complete():
-    if 'user_email' not in session:
-        return jsonify({'complete': False})
-    complete = is_profile_complete(session['user_email'])
-    return jsonify({'complete': complete})
-
-
-@app.route('/api/update-profile', methods=['POST'])
-def update_profile():
-    if 'user_email' not in session:
-        return jsonify({'success': False, 'message': 'Не авторизован'})
-
-    data = request.json
-    full_name = data.get('full_name')
-    phone = data.get('phone')
-
-    if not full_name or not phone:
-        return jsonify({'success': False, 'message': 'Заполните все поля'})
-
-    if update_user_profile(session['user_email'], full_name, phone):
-        session['user_name'] = full_name
-        return jsonify({'success': True})
-    return jsonify({'success': False, 'message': 'Ошибка при обновлении профиля'})
-
-
-@app.route('/api/send-reset-code', methods=['POST'])
-def send_reset_code():
-    data = request.json
-    email = data.get('email')
-
-    users = load_users()
-    email_lower = email.lower()
-    if email_lower not in users:
-        return jsonify({'success': False, 'message': 'Пользователь с таким email не найден'})
-
-    code = generate_verification_code()
-    expires_at = (datetime.now() + timedelta(minutes=5)).timestamp()
-
-    save_password_reset(email_lower, code, expires_at)
-
-    if send_verification_email(email_lower, code, 'reset'):
-        return jsonify({'success': True, 'message': 'Код восстановления отправлен на почту'})
-    else:
-        delete_password_reset(email_lower)
-        return jsonify({'success': False, 'message': 'Ошибка при отправке письма'})
-
-
-@app.route('/api/reset-password', methods=['POST'])
-def reset_password():
-    data = request.json
-    email = data.get('email')
-    code = data.get('code')
-    new_password = data.get('new_password')
-
-    email_lower = email.lower()
-    reset_data = get_password_reset(email_lower)
-    if not reset_data:
-        return jsonify({'success': False, 'message': 'Код не найден. Запросите новый код.'})
-
-    if datetime.now().timestamp() > reset_data['expires_at']:
-        delete_password_reset(email_lower)
-        return jsonify({'success': False, 'message': 'Срок действия кода истёк. Запросите новый.'})
-
-    if reset_data['code'] != code:
-        return jsonify({'success': False, 'message': 'Неверный код подтверждения'})
-
-    users = load_users()
-    if email_lower in users:
-        users[email_lower]['password'] = hash_password(new_password)
-        save_users(users)
-        delete_password_reset(email_lower)
-        return jsonify({'success': True, 'message': 'Пароль успешно изменён'})
-
-    return jsonify({'success': False, 'message': 'Пользователь не найден'})
-
-
-@app.route('/api/send-verification', methods=['POST'])
-def send_verification():
-    data = request.json
-    email = data.get('email')
-    full_name = data.get('full_name')
-    phone = data.get('phone')
-    password = data.get('password')
-
-    users = load_users()
-    email_lower = email.lower()
-    if email_lower in users:
-        return jsonify({'success': False, 'message': 'Пользователь с таким email уже существует'})
-
-    code = generate_verification_code()
-    expires_at = (datetime.now() + timedelta(minutes=5)).timestamp()
-
-    temp_data = {
-        'code': code,
-        'expires_at': expires_at,
-        'full_name': full_name,
-        'phone': phone,
-        'password': password
-    }
-    save_temp_registration(email_lower, temp_data)
-
-    if send_verification_email(email_lower, code, 'registration'):
-        return jsonify({'success': True, 'message': 'Код подтверждения отправлен на почту'})
-    else:
-        delete_temp_registration(email_lower)
-        return jsonify({'success': False, 'message': 'Ошибка при отправке письма. Попробуйте позже.'})
-
-
-@app.route('/api/verify-code', methods=['POST'])
-def verify_code():
-    data = request.json
-    email = data.get('email')
-    code = data.get('code')
-
-    email_lower = email.lower()
-    temp_data = get_temp_registration(email_lower)
-    if not temp_data:
-        return jsonify({'success': False, 'message': 'Код не найден. Запросите новый код.'})
-
-    if datetime.now().timestamp() > temp_data['expires_at']:
-        delete_temp_registration(email_lower)
-        return jsonify({'success': False, 'message': 'Срок действия кода истёк. Запросите новый.'})
-
-    if temp_data['code'] != code:
-        return jsonify({'success': False, 'message': 'Неверный код подтверждения'})
-
-    success, message = register_user(email_lower, temp_data['password'], temp_data['full_name'], temp_data['phone'])
-
-    if success:
-        delete_temp_registration(email_lower)
-        return jsonify({'success': True, 'message': message})
-    else:
-        return jsonify({'success': False, 'message': message})
-
-
-@app.route('/api/resend-verification', methods=['POST'])
-def resend_verification():
-    data = request.json
-    email = data.get('email')
-
-    email_lower = email.lower()
-    temp_data = get_temp_registration(email_lower)
-    if not temp_data:
-        return jsonify({'success': False, 'message': 'Данные не найдены. Заполните форму регистрации заново.'})
-
-    new_code = generate_verification_code()
-    temp_data['code'] = new_code
-    temp_data['expires_at'] = (datetime.now() + timedelta(minutes=5)).timestamp()
-
-    temp_registrations = load_verification_codes()
-    temp_registrations[email_lower] = temp_data
-    save_verification_codes(temp_registrations)
-
-    if send_verification_email(email_lower, new_code, 'registration'):
-        return jsonify({'success': True, 'message': 'Новый код отправлен на почту'})
-    else:
-        return jsonify({'success': False, 'message': 'Ошибка при отправке письма'})
-
-
-@app.route('/api/user/profile', methods=['GET'])
-def get_user_profile():
-    if 'user_email' not in session:
-        return jsonify({'error': 'Not logged in'}), 401
-
-    users = load_users()
-    user = users.get(session['user_email'], {})
-    return jsonify({
-        'full_name': user.get('full_name', ''),
-        'email': user.get('email', ''),
-        'phone': user.get('phone', ''),
-        'registered_at': user.get('registered_at', '')
-    })
-
-
-@app.route('/api/user/orders', methods=['GET'])
-def get_user_orders_api():
-    if 'user_email' not in session:
-        return jsonify([])
-
-    orders = get_user_orders(session['user_email'])
-    return jsonify(orders)
-
-
-@app.route('/api/home-reviews', methods=['GET'])
-def get_home_reviews():
-    reviews = load_reviews()
-    if len(reviews) == 0:
-        return jsonify([])
-
-    today_seed = int(datetime.now().strftime('%Y%m%d'))
-    random.seed(today_seed)
-    shuffled = reviews.copy()
-    random.shuffle(shuffled)
-    return jsonify(shuffled[:3])
-
-
-@app.route('/api/reviews', methods=['GET'])
-def get_reviews():
-    reviews = load_reviews()
-    return jsonify(reviews)
-
-
-@app.route('/api/add-review', methods=['POST'])
-def add_review():
-    if 'user_email' not in session:
-        return jsonify({'success': False, 'message': 'Не авторизован'})
-
-    data = request.json
-    name = data.get('name', 'Аноним')
-    rating = data.get('rating', 5)
-    text = data.get('text', '')
-
-    reviews = load_reviews()
-    reviews.insert(0, {
-        'name': name,
-        'rating': rating,
-        'text': text,
-        'date': datetime.now().strftime('%d.%m.%Y %H:%M')
-    })
-    save_reviews(reviews)
-
-    return jsonify({'success': True})
-
-
-@app.route('/api/products')
-def get_products():
-    search = request.args.get('search', '').lower()
-    category = request.args.get('category', '')
-    products = load_products()
-
-    filtered = products
-    if search:
-        filtered = [p for p in filtered if search in p['name'].lower()]
-    if category and category != 'all':
-        filtered = [p for p in filtered if p.get('category') == category]
-
-    return jsonify(filtered)
-
-
-@app.route('/api/product/<int:product_id>')
-def get_product(product_id):
-    products = load_products()
-    product = next((p for p in products if p['id'] == product_id), None)
-    return jsonify(product) if product else ('', 404)
-
-
-@app.route('/api/calculate-delivery', methods=['POST'])
-def calculate_delivery():
-    data = request.json
-    address = data.get('address', '')
-
-    distance = calculate_distance(address)
-    delivery_date, period_text = calculate_delivery_date(distance)
-
-    return jsonify({
-        'distance': distance,
-        'delivery_period': period_text,
-        'delivery_date': delivery_date
-    })
-
-
-@app.route('/api/add-to-cart', methods=['POST'])
-def add_to_cart():
-    data = request.json
-    product_id = data['product_id']
-    cart = session.get('cart', {})
-    cart[str(product_id)] = cart.get(str(product_id), 0) + 1
-    session['cart'] = cart
-    return jsonify({'success': True})
-
-
-@app.route('/api/update-cart', methods=['POST'])
-def update_cart():
-    data = request.json
-    product_id = str(data['product_id'])
-    quantity = data['quantity']
-    cart = session.get('cart', {})
-    if quantity > 0:
-        cart[product_id] = quantity
-    else:
-        cart.pop(product_id, None)
-    session['cart'] = cart
-    return jsonify({'success': True})
-
-
-@app.route('/api/remove-from-cart', methods=['POST'])
-def remove_from_cart():
-    data = request.json
-    cart = session.get('cart', {})
-    cart.pop(str(data['product_id']), None)
-    session['cart'] = cart
-    return jsonify({'success': True})
-
-
-@app.route('/api/apply-promo', methods=['POST'])
-def apply_promo():
-    data = request.json
-    promo_code = data.get('promo_code', '').upper()
-
-    if 'user_email' not in session:
-        return jsonify({'success': False, 'message': 'Войдите в аккаунт, чтобы использовать промокод'})
-
-    user_email = session['user_email']
-    promocodes = load_promocodes_list()
-
-    if is_promocode_used(user_email, promo_code):
-        return jsonify({'success': False, 'message': 'Вы уже использовали этот промокод'})
-
-    if promo_code in promocodes and promocodes[promo_code].get('active', True):
-        session['promo_code'] = promo_code
-        promo_data = promocodes[promo_code]
-        discount_text = f"{promo_data['discount']}%" if promo_data[
-                                                            'type'] == 'percent' else f"{promo_data['discount']} ₽"
-        return jsonify({'success': True, 'discount_text': discount_text})
-    else:
-        return jsonify({'success': False, 'message': 'Неверный промокод'})
-
-
-@app.route('/api/cart')
-def get_cart():
-    cart = session.get('cart', {})
-    promo_code = session.get('promo_code')
-    products = load_products()
-    promocodes = load_promocodes_list()
-
-    items = []
-    subtotal = 0
-    for product_id, quantity in cart.items():
-        product = next((p for p in products if p['id'] == int(product_id)), None)
-        if product:
-            price = get_product_price(product)
-            item_total = price * quantity
-            subtotal += item_total
-            items.append({
-                'id': product['id'],
-                'name': product['name'],
-                'price': price,
-                'quantity': quantity,
-                'total': item_total
-            })
-
-    discount = 0
-    if promo_code and promo_code in promocodes and promocodes[promo_code].get('active', True):
-        promo = promocodes[promo_code]
-        if promo['type'] == 'percent':
-            discount = subtotal * promo['discount'] / 100
-        else:
-            discount = min(promo['discount'], subtotal)
-
-    total = subtotal - discount
-
-    return jsonify({
-        'items': items,
-        'subtotal': subtotal,
-        'discount': discount,
-        'total': total
-    })
-
-
-@app.route('/api/checkout-card', methods=['POST'])
-def checkout_card():
-    data = request.json
-    customer_name = data.get('full_name', '')
-    customer_email = data.get('email', '')
-    customer_phone = data.get('phone', '')
-    delivery_address = data.get('delivery_address', '')
-    card_last4 = data.get('card_number', '****')
-
-    cart = session.get('cart', {})
-    promo_code = session.get('promo_code')
-    products = load_products()
-    promocodes = load_promocodes_list()
-
-    distance = calculate_distance(delivery_address)
-    delivery_date, period_text = calculate_delivery_date(distance)
-
-    items = []
-    subtotal = 0
-    for product_id, quantity in cart.items():
-        product = next((p for p in products if p['id'] == int(product_id)), None)
-        if product:
-            price = get_product_price(product)
-            item_total = price * quantity
-            subtotal += item_total
-            items.append({
-                'name': product['name'],
-                'quantity': quantity,
-                'price': price,
-                'total': item_total
-            })
-
-    discount = 0
-    if promo_code and promo_code in promocodes and promocodes[promo_code].get('active', True):
-        promo = promocodes[promo_code]
-        if promo['type'] == 'percent':
-            discount = subtotal * promo['discount'] / 100
-        else:
-            discount = min(promo['discount'], subtotal)
-
-    total = subtotal - discount
-
-    order_number = f"{datetime.now().strftime('%Y%m%d')}{random.randint(1000, 9999)}"
-
-    if promo_code and 'user_email' in session:
-        mark_promocode_used(session['user_email'], promo_code, order_number)
-
-    order_data = {
-        'order_number': order_number,
-        'datetime': datetime.now().strftime('%d.%m.%Y %H:%M:%S'),
-        'customer_name': customer_name,
-        'customer_email': customer_email,
-        'customer_phone': customer_phone,
-        'items': items,
-        'subtotal': subtotal,
-        'discount': discount,
-        'total': total,
-        'delivery_address': delivery_address,
-        'from_address': f"{OFFICE_COORDINATES['address']}",
-        'distance': distance,
-        'delivery_period': period_text,
-        'delivery_date': delivery_date,
-        'payment_method': 'card'
-    }
-
-    if 'user_email' in session:
-        save_order_to_history(session['user_email'], order_data)
-
-    payment_log = {
-        'order_number': order_number,
-        'customer': customer_name,
-        'email': customer_email,
-        'amount': total,
-        'phone': '89520062357',
-        'timestamp': datetime.now().strftime('%d.%m.%Y %H:%M:%S'),
-        'card_last4': card_last4,
-        'address': delivery_address,
-        'distance': distance,
-        'delivery_date': delivery_date
-    }
-
-    with open('payments_log.txt', 'a', encoding='utf-8') as f:
-        f.write(f"{json.dumps(payment_log, ensure_ascii=False)}\n")
-
-    print(f"\n💰 ОПЛАТА КАРТОЙ ЗАРЕГИСТРИРОВАНА!")
-    print(f"📦 Заказ #{order_number}")
-    print(f"👤 Клиент: {customer_name}")
-    print(f"📧 Email: {customer_email}")
-    print(f"💳 Сумма: {total:,} ₽")
-    print(f"📱 Счёт получателя: 89520062357 (Сбербанк)")
-    print(f"📍 Адрес: {delivery_address}")
-    print(f"📏 Расстояние: {distance} км")
-    print(f"🚚 Доставка: {period_text} (до {delivery_date})")
-
-    email_sent = send_receipt_email(order_data)
-
-    session.pop('cart', None)
-    session.pop('promo_code', None)
-
-    if email_sent:
-        return jsonify({
-            'message': f'✅ Заказ #{order_number} оплачен картой онлайн! Сумма {total:,} ₽ поступит на номер 89520062357. Чек отправлен на {customer_email}.'})
-    else:
-        return jsonify({
-            'message': f'✅ Заказ #{order_number} оплачен картой онлайн! Сумма {total:,} ₽ поступит на номер 89520062357.'})
-
-
-@app.route('/api/checkout-cash', methods=['POST'])
-def checkout_cash():
-    data = request.json
-    customer_name = data.get('full_name', '')
-    customer_email = data.get('email', '')
-    customer_phone = data.get('phone', '')
-    delivery_address = data.get('delivery_address', '')
-
-    cart = session.get('cart', {})
-    promo_code = session.get('promo_code')
-    products = load_products()
-    promocodes = load_promocodes_list()
-
-    distance = calculate_distance(delivery_address)
-    delivery_date, period_text = calculate_delivery_date(distance)
-
-    items = []
-    subtotal = 0
-    for product_id, quantity in cart.items():
-        product = next((p for p in products if p['id'] == int(product_id)), None)
-        if product:
-            price = get_product_price(product)
-            item_total = price * quantity
-            subtotal += item_total
-            items.append({
-                'name': product['name'],
-                'quantity': quantity,
-                'price': price,
-                'total': item_total
-            })
-
-    discount = 0
-    if promo_code and promo_code in promocodes and promocodes[promo_code].get('active', True):
-        promo = promocodes[promo_code]
-        if promo['type'] == 'percent':
-            discount = subtotal * promo['discount'] / 100
-        else:
-            discount = min(promo['discount'], subtotal)
-
-    total = subtotal - discount
-
-    order_number = f"{datetime.now().strftime('%Y%m%d')}{random.randint(1000, 9999)}"
-
-    if promo_code and 'user_email' in session:
-        mark_promocode_used(session['user_email'], promo_code, order_number)
-
-    order_data = {
-        'order_number': order_number,
-        'datetime': datetime.now().strftime('%d.%m.%Y %H:%M:%S'),
-        'customer_name': customer_name,
-        'customer_email': customer_email,
-        'customer_phone': customer_phone,
-        'items': items,
-        'subtotal': subtotal,
-        'discount': discount,
-        'total': total,
-        'delivery_address': delivery_address,
-        'from_address': f"{OFFICE_COORDINATES['address']}",
-        'distance': distance,
-        'delivery_period': period_text,
-        'delivery_date': delivery_date,
-        'payment_method': 'cash'
-    }
-
-    if 'user_email' in session:
-        save_order_to_history(session['user_email'], order_data)
-
-    order_log = {
-        'order_number': order_number,
-        'customer': customer_name,
-        'email': customer_email,
-        'amount': total,
-        'timestamp': datetime.now().strftime('%d.%m.%Y %H:%M:%S'),
-        'address': delivery_address,
-        'distance': distance,
-        'delivery_date': delivery_date,
-        'payment_method': 'cash'
-    }
-
-    with open('orders_log.txt', 'a', encoding='utf-8') as f:
-        f.write(f"{json.dumps(order_log, ensure_ascii=False)}\n")
-
-    print(f"\n💰 ЗАКАЗ НАЛИЧНЫМИ ОФОРМЛЕН!")
-    print(f"📦 Заказ #{order_number}")
-    print(f"👤 Клиент: {customer_name}")
-    print(f"📧 Email: {customer_email}")
-    print(f"💵 Сумма к оплате при получении: {total:,} ₽")
-    print(f"📍 Адрес доставки: {delivery_address}")
-    print(f"📏 Расстояние: {distance} км")
-    print(f"🚚 Доставка: {period_text} (до {delivery_date})")
-
-    email_sent = send_receipt_email(order_data)
-
-    session.pop('cart', None)
-    session.pop('promo_code', None)
-
-    if email_sent:
-        return jsonify({
-            'message': f'✅ Заказ #{order_number} оформлен! Оплата {total:,} ₽ наличными при получении. Чек отправлен на {customer_email}.'})
-    else:
-        return jsonify({'message': f'✅ Заказ #{order_number} оформлен! Оплата {total:,} ₽ наличными при получении.'})
-
-
-# ==================== API ДЛЯ АДМИН-ПАНЕЛИ ====================
-
-@app.route('/api/admin/products', methods=['GET'])
-def admin_get_products():
-    if 'user_email' not in session or not is_admin(session['user_email']):
-        return jsonify({'error': 'Access denied'}), 403
-    products = load_products()
-    return jsonify(products)
-
-
-@app.route('/api/admin/add-product', methods=['POST'])
-def admin_add_product():
-    if 'user_email' not in session or not is_admin(session['user_email']):
-        return jsonify({'error': 'Access denied'}), 403
-
-    name = request.form.get('name')
-    price = request.form.get('price')
-    sale_price = request.form.get('sale_price')
-    discount_percent = request.form.get('discount_percent', '0')
-    description = request.form.get('description')
-    category = request.form.get('category', 'services')
-    image = request.files.get('image')
-
-    products = load_products()
-    new_id = max([p['id'] for p in products]) + 1 if products else 1
-
-    image_path = '/static/uploads/default.jpg'
-    if image:
-        filename = secure_filename(f"product_{new_id}_{image.filename}")
-        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-        image.save(filepath)
-        image_path = f'/static/uploads/{filename}'
-
-    sale_price_val = None
-    discount_percent_val = int(discount_percent) if discount_percent else 0
-
-    if sale_price and int(sale_price) > 0:
-        sale_price_val = int(sale_price)
-        if discount_percent_val == 0 and int(price) > 0:
-            discount_percent_val = int((1 - int(sale_price) / int(price)) * 100)
-    elif discount_percent_val > 0 and int(price) > 0:
-        sale_price_val = int(int(price) * (1 - discount_percent_val / 100))
-
-    products.append({
-        'id': new_id,
-        'name': name,
-        'price': int(price),
-        'sale_price': sale_price_val,
-        'discount_percent': discount_percent_val,
-        'description': description,
-        'image': image_path,
-        'category': category
-    })
-    save_products(products)
-    return jsonify({'success': True})
-
-
-@app.route('/api/admin/edit-product', methods=['POST'])
-def admin_edit_product():
-    if 'user_email' not in session or not is_admin(session['user_email']):
-        return jsonify({'error': 'Access denied'}), 403
-
-    data = request.json
-    product_id = data.get('id')
-    name = data.get('name')
-    price = data.get('price')
-    sale_price = data.get('sale_price')
-    discount_percent = data.get('discount_percent', 0)
-    description = data.get('description')
-    category = data.get('category', 'services')
-
-    products = load_products()
-    for p in products:
-        if p['id'] == product_id:
-            p['name'] = name
-            p['price'] = price
-            p['sale_price'] = sale_price if sale_price and sale_price > 0 else None
-            p['discount_percent'] = discount_percent or 0
-            p['description'] = description
-            p['category'] = category
-            break
-    save_products(products)
-    return jsonify({'success': True})
-
-
-@app.route('/api/admin/delete-product', methods=['POST'])
-def admin_delete_product():
-    if 'user_email' not in session or not is_admin(session['user_email']):
-        return jsonify({'error': 'Access denied'}), 403
-
-    data = request.json
-    product_id = data.get('id')
-
-    products = load_products()
-    products = [p for p in products if p['id'] != product_id]
-    save_products(products)
-    return jsonify({'success': True})
-
-
-@app.route('/api/admin/news', methods=['GET'])
-def admin_get_news():
-    news = load_news()
-    return jsonify(news)
-
-
-@app.route('/api/admin/add-news', methods=['POST'])
-def admin_add_news():
-    if 'user_email' not in session or not is_admin(session['user_email']):
-        return jsonify({'error': 'Access denied'}), 403
-
-    title = request.form.get('title')
-    text = request.form.get('text')
-    fullText = request.form.get('fullText')
-    image = request.files.get('image')
-
-    news = load_news()
-    new_id = max([n['id'] for n in news]) + 1 if news else 1
-
-    image_path = '/static/uploads/default_news.jpg'
-    if image:
-        filename = secure_filename(f"news_{new_id}_{image.filename}")
-        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-        image.save(filepath)
-        image_path = f'/static/uploads/{filename}'
-
-    news.append({
-        'id': new_id,
-        'date': datetime.now().strftime('%d.%m.%Y'),
-        'title': title,
-        'text': text,
-        'fullText': fullText,
-        'image': image_path
-    })
-    save_news(news)
-    return jsonify({'success': True})
-
-
-@app.route('/api/admin/edit-news', methods=['POST'])
-def admin_edit_news():
-    if 'user_email' not in session or not is_admin(session['user_email']):
-        return jsonify({'error': 'Access denied'}), 403
-
-    data = request.json
-    news_id = data.get('id')
-    title = data.get('title')
-    text = data.get('text')
-    fullText = data.get('fullText')
-
-    news = load_news()
-    for n in news:
-        if n['id'] == news_id:
-            n['title'] = title
-            n['text'] = text
-            n['fullText'] = fullText
-            break
-    save_news(news)
-    return jsonify({'success': True})
-
-
-@app.route('/api/admin/delete-news', methods=['POST'])
-def admin_delete_news():
-    if 'user_email' not in session or not is_admin(session['user_email']):
-        return jsonify({'error': 'Access denied'}), 403
-
-    data = request.json
-    news_id = data.get('id')
-
-    news = load_news()
-    news = [n for n in news if n['id'] != news_id]
-    save_news(news)
-    return jsonify({'success': True})
-
-
-@app.route('/api/admin/promocodes', methods=['GET'])
-def admin_get_promocodes():
-    if 'user_email' not in session or not is_admin(session['user_email']):
-        return jsonify({'error': 'Access denied'}), 403
-    promocodes = load_promocodes_list()
-    return jsonify(promocodes)
-
-
-@app.route('/api/promocodes', methods=['GET'])
-def get_promocodes():
-    promocodes = load_promocodes_list()
-    return jsonify(promocodes)
-
-
-@app.route('/api/admin/add-promocode', methods=['POST'])
-def admin_add_promocode():
-    if 'user_email' not in session or not is_admin(session['user_email']):
-        return jsonify({'error': 'Access denied'}), 403
-
-    data = request.json
-    code = data.get('code', '').upper()
-    type = data.get('type')
-    discount = data.get('discount')
-
-    if not code or not discount:
-        return jsonify({'success': False, 'message': 'Заполните все поля'})
-
-    promocodes = load_promocodes_list()
-    if code in promocodes:
-        return jsonify({'success': False, 'message': 'Промокод с таким кодом уже существует'})
-
-    promocodes[code] = {
-        'discount': discount,
-        'type': type,
-        'active': True
-    }
-    save_promocodes_list(promocodes)
-    return jsonify({'success': True})
-
-
-@app.route('/api/admin/toggle-promocode', methods=['POST'])
-def admin_toggle_promocode():
-    if 'user_email' not in session or not is_admin(session['user_email']):
-        return jsonify({'error': 'Access denied'}), 403
-
-    data = request.json
-    code = data.get('code', '').upper()
-
-    promocodes = load_promocodes_list()
-    if code in promocodes:
-        promocodes[code]['active'] = not promocodes[code]['active']
-        save_promocodes_list(promocodes)
-        status = 'включён' if promocodes[code]['active'] else 'отключён'
-        return jsonify({'success': True, 'message': f'Промокод {code} {status}'})
-    return jsonify({'success': False, 'message': 'Промокод не найден'})
-
-
-@app.route('/api/admin/delete-promocode', methods=['POST'])
-def admin_delete_promocode():
-    if 'user_email' not in session or not is_admin(session['user_email']):
-        return jsonify({'error': 'Access denied'}), 403
-
-    data = request.json
-    code = data.get('code', '').upper()
-
-    promocodes = load_promocodes_list()
-    if code in promocodes:
-        del promocodes[code]
-        save_promocodes_list(promocodes)
-        return jsonify({'success': True})
-    return jsonify({'success': False, 'message': 'Промокод не найден'})
-
-
-@app.route('/api/admin/delete-review', methods=['POST'])
-def admin_delete_review():
-    if 'user_email' not in session or not is_admin(session['user_email']):
-        return jsonify({'error': 'Access denied'}), 403
-
-    data = request.json
-    index = data.get('index')
-
-    reviews = load_reviews()
-    if 0 <= index < len(reviews):
-        reviews.pop(index)
-        save_reviews(reviews)
-        return jsonify({'success': True})
-    return jsonify({'success': False, 'message': 'Отзыв не найден'})
-
-
-@app.route('/api/admin/orders', methods=['GET'])
-def admin_get_orders():
-    if 'user_email' not in session or not is_admin(session['user_email']):
-        return jsonify({'error': 'Access denied'}), 403
-    orders = load_orders()
-    return jsonify(orders)
-
-
-@app.route('/api/admin/users', methods=['GET'])
-def admin_get_users():
-    if 'user_email' not in session or not is_admin(session['user_email']):
-        return jsonify({'error': 'Access denied'}), 403
-    users = load_users()
-    return jsonify(users)
-
-
-@app.route('/api/admin/make-admin', methods=['POST'])
-def admin_make_admin():
-    if 'user_email' not in session or not is_admin(session['user_email']):
-        return jsonify({'error': 'Access denied'}), 403
-
-    data = request.json
-    email = data.get('email')
-
-    users = load_users()
-    email_lower = email.lower()
-    if email_lower in users:
-        users[email_lower]['is_admin'] = True
-        save_users(users)
-        return jsonify({'success': True})
-    return jsonify({'success': False, 'message': 'Пользователь не найден'})
-
-
-@app.route('/api/admin/ban-user', methods=['POST'])
-def ban_user_route():
-    if 'user_email' not in session or not is_admin(session['user_email']):
-        return jsonify({'error': 'Access denied'}), 403
-
-    data = request.json
-    email = data.get('email')
-    duration_minutes = data.get('duration_minutes')
-    reason = data.get('reason', 'Нарушение правил')
-    message = data.get('message', 'Обратитесь к администратору для уточнения деталей')
-
-    if not email or not duration_minutes:
-        return jsonify({'success': False, 'message': 'Не указан email или срок бана'})
-
-    banned_users = load_banned_users()
-    ban_until = datetime.now() + timedelta(minutes=duration_minutes)
-
-    banned_users[email.lower()] = {
-        'banned_at': datetime.now().isoformat(),
-        'ban_until': ban_until.isoformat(),
-        'duration_minutes': duration_minutes,
-        'reason': reason,
-        'message': message
-    }
-
-    save_banned_users(banned_users)
-
-    if 'user_email' in session and session['user_email'].lower() == email.lower():
-        session.clear()
-
-    return jsonify(
-        {'success': True, 'message': f'Пользователь {email} забанен до {ban_until.strftime("%d.%m.%Y %H:%M:%S")}'})
-
-
-@app.route('/api/admin/unban-user', methods=['POST'])
-def unban_user_route():
-    if 'user_email' not in session or not is_admin(session['user_email']):
-        return jsonify({'error': 'Access denied'}), 403
-
-    data = request.json
-    email = data.get('email')
-
-    if not email:
-        return jsonify({'success': False, 'message': 'Не указан email'})
-
-    banned_users = load_banned_users()
-    if email.lower() in banned_users:
-        del banned_users[email.lower()]
-        save_banned_users(banned_users)
-        return jsonify({'success': True, 'message': f'Бан снят с {email}'})
-
-    return jsonify({'success': False, 'message': 'Пользователь не забанен'})
-
-
-# ==================== ГЛАВНАЯ СТРАНИЦА ====================
+# ==================== ГЛАВНАЯ СТРАНИЦА (ДОБАВЛЯЕМ ЯВНЫЙ МАРШРУТ) ====================
 
 HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
 <html lang="ru">
@@ -2177,7 +756,6 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Zetta | Профессиональная сборка ПК и IT-услуги</title>
     <style>
-        /* Все стили остаются без изменений */
         * {
             margin: 0;
             padding: 0;
@@ -7758,6 +6336,1085 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
 </body>
 </html>{% endraw %}
 '''
+
+# === ВАЖНО: ГЛАВНЫЙ МАРШРУТ ===
+@app.route('/')
+def index():
+    return render_template_string(HTML_TEMPLATE)
+
+# === ОСТАЛЬНЫЕ МАРШРУТЫ (API и т.д.) ===
+
+@app.route('/api/chat/send-operator-request', methods=['POST'])
+def send_operator_request():
+    if 'user_email' not in session:
+        return jsonify({'success': False, 'message': 'Не авторизован'}), 401
+
+    users = load_users()
+    user = users.get(session['user_email'], {})
+    user_name = user.get('full_name', 'Не указано')
+    user_phone = user.get('phone', 'Не указан')
+    user_email = session['user_email']
+
+    email_sent = send_operator_request_email(user_name, user_phone, user_email)
+
+    return jsonify({
+        'success': True,
+        'message': '✅ Заявка отправлена! Оператор свяжется с вами в ближайшее время.',
+        'email_sent': email_sent
+    })
+
+@app.route('/api/chat/send-payment-question', methods=['POST'])
+def send_payment_question():
+    if 'user_email' not in session:
+        return jsonify({'success': False, 'message': 'Не авторизован'}), 401
+
+    auto_response = "Доброго времени суток, наш дорогой клиент! В данный момент оплата принимается только за наличный расчёт или же перевод на карту. Онлайн оплата скоро появится. ЖДИТЕ НАШИХ НОВОСТЕЙ!"
+
+    return jsonify({
+        'success': True,
+        'response': auto_response
+    })
+
+@app.route('/api/chat/site-creation-time', methods=['POST'])
+def site_creation_time():
+    if 'user_email' not in session:
+        return jsonify({'success': False, 'message': 'Не авторизован'}), 401
+
+    response = "В среднем создание сайта уходит 1-2 недели, но если сайт не содержит в себе сложных элементов, то создание такого проекта сокращается вдвое!"
+
+    return jsonify({
+        'success': True,
+        'response': response
+    })
+
+@app.route('/api/chat/consultation', methods=['POST'])
+def consultation():
+    if 'user_email' not in session:
+        return jsonify({'success': False, 'message': 'Не авторизован'}), 401
+
+    data = request.json
+    choice = data.get('choice')
+
+    phones = {
+        'system_admin': '89836074115',
+        'director': '89520062357',
+        'manager': '89132447707'
+    }
+
+    names = {
+        'system_admin': 'Системный администратор',
+        'director': 'Генеральный директор',
+        'manager': 'Менеджер'
+    }
+
+    if choice in phones:
+        response = f"{names[choice]}: {phones[choice]}"
+    else:
+        response = "Пожалуйста, выберите одного из специалистов: Системный администратор, Генеральный директор или Менеджер."
+
+    return jsonify({
+        'success': True,
+        'response': response
+    })
+
+@app.route('/api/chat/cooperation', methods=['POST'])
+def cooperation():
+    if 'user_email' not in session:
+        return jsonify({'success': False, 'message': 'Не авторизован'}), 401
+
+    response = "По вопросам рекламы и сотрудничества пишите нам на почту zetta_report@zetta22.ru или можете позвонить по номеру телефона 89520062357."
+
+    return jsonify({
+        'success': True,
+        'response': response
+    })
+
+@app.route('/api/vlog', methods=['GET'])
+def get_vlog():
+    vlog = load_vlog()
+    return jsonify(vlog)
+
+@app.route('/api/admin/update-vlog', methods=['POST'])
+def update_vlog():
+    if 'user_email' not in session or not is_admin(session['user_email']):
+        return jsonify({'error': 'Access denied'}), 403
+
+    data = request.json
+    text = data.get('text', '')
+
+    vlog = load_vlog()
+    vlog['text'] = text
+    save_vlog(vlog)
+
+    return jsonify({'success': True, 'message': 'Влог обновлён'})
+
+@app.route('/api/send-feedback', methods=['POST'])
+def send_feedback():
+    if 'user_email' not in session:
+        return jsonify({'success': False, 'message': 'Не авторизован'}), 401
+
+    data = request.json
+    message = data.get('message', '')
+
+    if not message:
+        return jsonify({'success': False, 'message': 'Введите сообщение'})
+
+    users = load_users()
+    user = users.get(session['user_email'], {})
+    user_name = user.get('full_name', 'Не указано')
+    user_phone = user.get('phone', 'Не указан')
+    user_email = session['user_email']
+
+    try:
+        msg = MIMEMultipart()
+        msg['From'] = EMAIL_CONFIG['email']
+        msg['To'] = EMAIL_CONFIG['email']
+        msg['Subject'] = f'ПРЕДЛОЖЕНИЕ/ЖАЛОБА от {user_name}'
+
+        html_content = f'''
+        <!DOCTYPE html>
+        <html>
+        <head><meta charset="UTF-8"></head>
+        <body style="font-family: Arial, sans-serif;">
+            <h1 style="color: #e74c3c;">📬 НОВОЕ СООБЩЕНИЕ ОТ ПОЛЬЗОВАТЕЛЯ</h1>
+            <hr>
+            <p><strong>👤 Отправитель:</strong> {user_name}</p>
+            <p><strong>📧 Email:</strong> {user_email}</p>
+            <p><strong>📱 Телефон:</strong> {user_phone}</p>
+            <p><strong>⏰ Время отправки:</strong> {datetime.now().strftime('%d.%m.%Y %H:%M:%S')}</p>
+            <hr>
+            <p><strong>💬 Сообщение:</strong></p>
+            <div style="background: #f0f0f0; padding: 1rem; border-radius: 8px; margin-top: 0.5rem;">
+                {message.replace(chr(10), '<br>')}
+            </div>
+            <hr>
+            <p style="color: #888;">Сообщение отправлено через форму на сайте Zetta</p>
+        </body>
+        </html>
+        '''
+
+        msg.attach(MIMEText(html_content, 'html', 'utf-8'))
+
+        server = smtplib.SMTP_SSL(EMAIL_CONFIG['smtp_server'], EMAIL_CONFIG['smtp_port'])
+        server.login(EMAIL_CONFIG['email'], EMAIL_CONFIG['password'])
+        server.send_message(msg)
+        server.quit()
+
+        return jsonify({'success': True, 'message': 'Сообщение отправлено! Спасибо за обратную связь.'})
+    except Exception as e:
+        print(f"Ошибка отправки: {e}")
+        return jsonify({'success': False, 'message': 'Ошибка при отправке. Попробуйте позже.'})
+
+@app.route('/api/auth/status', methods=['GET'])
+def auth_status():
+    if 'user_email' in session:
+        is_banned, ban_until, ban_reason, ban_message = is_user_banned(session['user_email'])
+        if is_banned:
+            session.clear()
+            return jsonify({'logged_in': False, 'is_admin': False, 'banned': True})
+
+        users = load_users()
+        user = users.get(session['user_email'], {})
+        return jsonify({
+            'logged_in': True,
+            'user': {
+                'full_name': user.get('full_name', ''),
+                'email': user.get('email', ''),
+                'phone': user.get('phone', ''),
+                'registered_at': user.get('registered_at', '')
+            },
+            'is_admin': user.get('is_admin', False)
+        })
+    return jsonify({'logged_in': False, 'is_admin': False})
+
+@app.route('/api/auth/login', methods=['POST'])
+def api_login():
+    data = request.json
+    success, message = login_user(data.get('email'), data.get('password'))
+    return jsonify({'success': success, 'message': message})
+
+@app.route('/api/auth/logout', methods=['POST'])
+def api_logout():
+    session.pop('user_email', None)
+    session.pop('user_name', None)
+    session.pop('is_admin', None)
+    return jsonify({'success': True})
+
+@app.route('/api/check-profile-complete', methods=['GET'])
+def check_profile_complete():
+    if 'user_email' not in session:
+        return jsonify({'complete': False})
+    complete = is_profile_complete(session['user_email'])
+    return jsonify({'complete': complete})
+
+@app.route('/api/update-profile', methods=['POST'])
+def update_profile():
+    if 'user_email' not in session:
+        return jsonify({'success': False, 'message': 'Не авторизован'})
+
+    data = request.json
+    full_name = data.get('full_name')
+    phone = data.get('phone')
+
+    if not full_name or not phone:
+        return jsonify({'success': False, 'message': 'Заполните все поля'})
+
+    if update_user_profile(session['user_email'], full_name, phone):
+        session['user_name'] = full_name
+        return jsonify({'success': True})
+    return jsonify({'success': False, 'message': 'Ошибка при обновлении профиля'})
+
+@app.route('/api/send-reset-code', methods=['POST'])
+def send_reset_code():
+    data = request.json
+    email = data.get('email')
+
+    users = load_users()
+    email_lower = email.lower()
+    if email_lower not in users:
+        return jsonify({'success': False, 'message': 'Пользователь с таким email не найден'})
+
+    code = generate_verification_code()
+    expires_at = (datetime.now() + timedelta(minutes=5)).timestamp()
+
+    save_password_reset(email_lower, code, expires_at)
+
+    if send_verification_email(email_lower, code, 'reset'):
+        return jsonify({'success': True, 'message': 'Код восстановления отправлен на почту'})
+    else:
+        delete_password_reset(email_lower)
+        return jsonify({'success': False, 'message': 'Ошибка при отправке письма'})
+
+@app.route('/api/reset-password', methods=['POST'])
+def reset_password():
+    data = request.json
+    email = data.get('email')
+    code = data.get('code')
+    new_password = data.get('new_password')
+
+    email_lower = email.lower()
+    reset_data = get_password_reset(email_lower)
+    if not reset_data:
+        return jsonify({'success': False, 'message': 'Код не найден. Запросите новый код.'})
+
+    if datetime.now().timestamp() > reset_data['expires_at']:
+        delete_password_reset(email_lower)
+        return jsonify({'success': False, 'message': 'Срок действия кода истёк. Запросите новый.'})
+
+    if reset_data['code'] != code:
+        return jsonify({'success': False, 'message': 'Неверный код подтверждения'})
+
+    users = load_users()
+    if email_lower in users:
+        users[email_lower]['password'] = hash_password(new_password)
+        save_users(users)
+        delete_password_reset(email_lower)
+        return jsonify({'success': True, 'message': 'Пароль успешно изменён'})
+
+    return jsonify({'success': False, 'message': 'Пользователь не найден'})
+
+@app.route('/api/send-verification', methods=['POST'])
+def send_verification():
+    data = request.json
+    email = data.get('email')
+    full_name = data.get('full_name')
+    phone = data.get('phone')
+    password = data.get('password')
+
+    users = load_users()
+    email_lower = email.lower()
+    if email_lower in users:
+        return jsonify({'success': False, 'message': 'Пользователь с таким email уже существует'})
+
+    code = generate_verification_code()
+    expires_at = (datetime.now() + timedelta(minutes=5)).timestamp()
+
+    temp_data = {
+        'code': code,
+        'expires_at': expires_at,
+        'full_name': full_name,
+        'phone': phone,
+        'password': password
+    }
+    save_temp_registration(email_lower, temp_data)
+
+    if send_verification_email(email_lower, code, 'registration'):
+        return jsonify({'success': True, 'message': 'Код подтверждения отправлен на почту'})
+    else:
+        delete_temp_registration(email_lower)
+        return jsonify({'success': False, 'message': 'Ошибка при отправке письма. Попробуйте позже.'})
+
+@app.route('/api/verify-code', methods=['POST'])
+def verify_code():
+    data = request.json
+    email = data.get('email')
+    code = data.get('code')
+
+    email_lower = email.lower()
+    temp_data = get_temp_registration(email_lower)
+    if not temp_data:
+        return jsonify({'success': False, 'message': 'Код не найден. Запросите новый код.'})
+
+    if datetime.now().timestamp() > temp_data['expires_at']:
+        delete_temp_registration(email_lower)
+        return jsonify({'success': False, 'message': 'Срок действия кода истёк. Запросите новый.'})
+
+    if temp_data['code'] != code:
+        return jsonify({'success': False, 'message': 'Неверный код подтверждения'})
+
+    success, message = register_user(email_lower, temp_data['password'], temp_data['full_name'], temp_data['phone'])
+
+    if success:
+        delete_temp_registration(email_lower)
+        return jsonify({'success': True, 'message': message})
+    else:
+        return jsonify({'success': False, 'message': message})
+
+@app.route('/api/resend-verification', methods=['POST'])
+def resend_verification():
+    data = request.json
+    email = data.get('email')
+
+    email_lower = email.lower()
+    temp_data = get_temp_registration(email_lower)
+    if not temp_data:
+        return jsonify({'success': False, 'message': 'Данные не найдены. Заполните форму регистрации заново.'})
+
+    new_code = generate_verification_code()
+    temp_data['code'] = new_code
+    temp_data['expires_at'] = (datetime.now() + timedelta(minutes=5)).timestamp()
+
+    temp_registrations = load_verification_codes()
+    temp_registrations[email_lower] = temp_data
+    save_verification_codes(temp_registrations)
+
+    if send_verification_email(email_lower, new_code, 'registration'):
+        return jsonify({'success': True, 'message': 'Новый код отправлен на почту'})
+    else:
+        return jsonify({'success': False, 'message': 'Ошибка при отправке письма'})
+
+@app.route('/api/user/profile', methods=['GET'])
+def get_user_profile():
+    if 'user_email' not in session:
+        return jsonify({'error': 'Not logged in'}), 401
+
+    users = load_users()
+    user = users.get(session['user_email'], {})
+    return jsonify({
+        'full_name': user.get('full_name', ''),
+        'email': user.get('email', ''),
+        'phone': user.get('phone', ''),
+        'registered_at': user.get('registered_at', '')
+    })
+
+@app.route('/api/user/orders', methods=['GET'])
+def get_user_orders_api():
+    if 'user_email' not in session:
+        return jsonify([])
+
+    orders = get_user_orders(session['user_email'])
+    return jsonify(orders)
+
+@app.route('/api/home-reviews', methods=['GET'])
+def get_home_reviews():
+    reviews = load_reviews()
+    if len(reviews) == 0:
+        return jsonify([])
+
+    today_seed = int(datetime.now().strftime('%Y%m%d'))
+    random.seed(today_seed)
+    shuffled = reviews.copy()
+    random.shuffle(shuffled)
+    return jsonify(shuffled[:3])
+
+@app.route('/api/reviews', methods=['GET'])
+def get_reviews():
+    reviews = load_reviews()
+    return jsonify(reviews)
+
+@app.route('/api/add-review', methods=['POST'])
+def add_review():
+    if 'user_email' not in session:
+        return jsonify({'success': False, 'message': 'Не авторизован'})
+
+    data = request.json
+    name = data.get('name', 'Аноним')
+    rating = data.get('rating', 5)
+    text = data.get('text', '')
+
+    reviews = load_reviews()
+    reviews.insert(0, {
+        'name': name,
+        'rating': rating,
+        'text': text,
+        'date': datetime.now().strftime('%d.%m.%Y %H:%M')
+    })
+    save_reviews(reviews)
+
+    return jsonify({'success': True})
+
+@app.route('/api/products')
+def get_products():
+    search = request.args.get('search', '').lower()
+    category = request.args.get('category', '')
+    products = load_products()
+
+    filtered = products
+    if search:
+        filtered = [p for p in filtered if search in p['name'].lower()]
+    if category and category != 'all':
+        filtered = [p for p in filtered if p.get('category') == category]
+
+    return jsonify(filtered)
+
+@app.route('/api/product/<int:product_id>')
+def get_product(product_id):
+    products = load_products()
+    product = next((p for p in products if p['id'] == product_id), None)
+    return jsonify(product) if product else ('', 404)
+
+@app.route('/api/calculate-delivery', methods=['POST'])
+def calculate_delivery():
+    data = request.json
+    address = data.get('address', '')
+
+    distance = calculate_distance(address)
+    delivery_date, period_text = calculate_delivery_date(distance)
+
+    return jsonify({
+        'distance': distance,
+        'delivery_period': period_text,
+        'delivery_date': delivery_date
+    })
+
+@app.route('/api/add-to-cart', methods=['POST'])
+def add_to_cart():
+    data = request.json
+    product_id = data['product_id']
+    cart = session.get('cart', {})
+    cart[str(product_id)] = cart.get(str(product_id), 0) + 1
+    session['cart'] = cart
+    return jsonify({'success': True})
+
+@app.route('/api/update-cart', methods=['POST'])
+def update_cart():
+    data = request.json
+    product_id = str(data['product_id'])
+    quantity = data['quantity']
+    cart = session.get('cart', {})
+    if quantity > 0:
+        cart[product_id] = quantity
+    else:
+        cart.pop(product_id, None)
+    session['cart'] = cart
+    return jsonify({'success': True})
+
+@app.route('/api/remove-from-cart', methods=['POST'])
+def remove_from_cart():
+    data = request.json
+    cart = session.get('cart', {})
+    cart.pop(str(data['product_id']), None)
+    session['cart'] = cart
+    return jsonify({'success': True})
+
+@app.route('/api/apply-promo', methods=['POST'])
+def apply_promo():
+    data = request.json
+    promo_code = data.get('promo_code', '').upper()
+
+    if 'user_email' not in session:
+        return jsonify({'success': False, 'message': 'Войдите в аккаунт, чтобы использовать промокод'})
+
+    user_email = session['user_email']
+    promocodes = load_promocodes_list()
+
+    if is_promocode_used(user_email, promo_code):
+        return jsonify({'success': False, 'message': 'Вы уже использовали этот промокод'})
+
+    if promo_code in promocodes and promocodes[promo_code].get('active', True):
+        session['promo_code'] = promo_code
+        promo_data = promocodes[promo_code]
+        discount_text = f"{promo_data['discount']}%" if promo_data[
+                                                            'type'] == 'percent' else f"{promo_data['discount']} ₽"
+        return jsonify({'success': True, 'discount_text': discount_text})
+    else:
+        return jsonify({'success': False, 'message': 'Неверный промокод'})
+
+@app.route('/api/cart')
+def get_cart():
+    cart = session.get('cart', {})
+    promo_code = session.get('promo_code')
+    products = load_products()
+    promocodes = load_promocodes_list()
+
+    items = []
+    subtotal = 0
+    for product_id, quantity in cart.items():
+        product = next((p for p in products if p['id'] == int(product_id)), None)
+        if product:
+            price = get_product_price(product)
+            item_total = price * quantity
+            subtotal += item_total
+            items.append({
+                'id': product['id'],
+                'name': product['name'],
+                'price': price,
+                'quantity': quantity,
+                'total': item_total
+            })
+
+    discount = 0
+    if promo_code and promo_code in promocodes and promocodes[promo_code].get('active', True):
+        promo = promocodes[promo_code]
+        if promo['type'] == 'percent':
+            discount = subtotal * promo['discount'] / 100
+        else:
+            discount = min(promo['discount'], subtotal)
+
+    total = subtotal - discount
+
+    return jsonify({
+        'items': items,
+        'subtotal': subtotal,
+        'discount': discount,
+        'total': total
+    })
+
+@app.route('/api/checkout-card', methods=['POST'])
+def checkout_card():
+    data = request.json
+    customer_name = data.get('full_name', '')
+    customer_email = data.get('email', '')
+    customer_phone = data.get('phone', '')
+    delivery_address = data.get('delivery_address', '')
+    card_last4 = data.get('card_number', '****')
+
+    cart = session.get('cart', {})
+    promo_code = session.get('promo_code')
+    products = load_products()
+    promocodes = load_promocodes_list()
+
+    distance = calculate_distance(delivery_address)
+    delivery_date, period_text = calculate_delivery_date(distance)
+
+    items = []
+    subtotal = 0
+    for product_id, quantity in cart.items():
+        product = next((p for p in products if p['id'] == int(product_id)), None)
+        if product:
+            price = get_product_price(product)
+            item_total = price * quantity
+            subtotal += item_total
+            items.append({
+                'name': product['name'],
+                'quantity': quantity,
+                'price': price,
+                'total': item_total
+            })
+
+    discount = 0
+    if promo_code and promo_code in promocodes and promocodes[promo_code].get('active', True):
+        promo = promocodes[promo_code]
+        if promo['type'] == 'percent':
+            discount = subtotal * promo['discount'] / 100
+        else:
+            discount = min(promo['discount'], subtotal)
+
+    total = subtotal - discount
+
+    order_number = f"{datetime.now().strftime('%Y%m%d')}{random.randint(1000, 9999)}"
+
+    if promo_code and 'user_email' in session:
+        mark_promocode_used(session['user_email'], promo_code, order_number)
+
+    order_data = {
+        'order_number': order_number,
+        'datetime': datetime.now().strftime('%d.%m.%Y %H:%M:%S'),
+        'customer_name': customer_name,
+        'customer_email': customer_email,
+        'customer_phone': customer_phone,
+        'items': items,
+        'subtotal': subtotal,
+        'discount': discount,
+        'total': total,
+        'delivery_address': delivery_address,
+        'from_address': f"{OFFICE_COORDINATES['address']}",
+        'distance': distance,
+        'delivery_period': period_text,
+        'delivery_date': delivery_date,
+        'payment_method': 'card'
+    }
+
+    if 'user_email' in session:
+        save_order_to_history(session['user_email'], order_data)
+
+    payment_log = {
+        'order_number': order_number,
+        'customer': customer_name,
+        'email': customer_email,
+        'amount': total,
+        'phone': '89520062357',
+        'timestamp': datetime.now().strftime('%d.%m.%Y %H:%M:%S'),
+        'card_last4': card_last4,
+        'address': delivery_address,
+        'distance': distance,
+        'delivery_date': delivery_date
+    }
+
+    with open('payments_log.txt', 'a', encoding='utf-8') as f:
+        f.write(f"{json.dumps(payment_log, ensure_ascii=False)}\n")
+
+    print(f"\n💰 ОПЛАТА КАРТОЙ ЗАРЕГИСТРИРОВАНА!")
+    print(f"📦 Заказ #{order_number}")
+    print(f"👤 Клиент: {customer_name}")
+    print(f"📧 Email: {customer_email}")
+    print(f"💳 Сумма: {total:,} ₽")
+    print(f"📱 Счёт получателя: 89520062357 (Сбербанк)")
+    print(f"📍 Адрес: {delivery_address}")
+    print(f"📏 Расстояние: {distance} км")
+    print(f"🚚 Доставка: {period_text} (до {delivery_date})")
+
+    email_sent = send_receipt_email(order_data)
+
+    session.pop('cart', None)
+    session.pop('promo_code', None)
+
+    if email_sent:
+        return jsonify({
+            'message': f'✅ Заказ #{order_number} оплачен картой онлайн! Сумма {total:,} ₽ поступит на номер 89520062357. Чек отправлен на {customer_email}.'})
+    else:
+        return jsonify({
+            'message': f'✅ Заказ #{order_number} оплачен картой онлайн! Сумма {total:,} ₽ поступит на номер 89520062357.'})
+
+@app.route('/api/checkout-cash', methods=['POST'])
+def checkout_cash():
+    data = request.json
+    customer_name = data.get('full_name', '')
+    customer_email = data.get('email', '')
+    customer_phone = data.get('phone', '')
+    delivery_address = data.get('delivery_address', '')
+
+    cart = session.get('cart', {})
+    promo_code = session.get('promo_code')
+    products = load_products()
+    promocodes = load_promocodes_list()
+
+    distance = calculate_distance(delivery_address)
+    delivery_date, period_text = calculate_delivery_date(distance)
+
+    items = []
+    subtotal = 0
+    for product_id, quantity in cart.items():
+        product = next((p for p in products if p['id'] == int(product_id)), None)
+        if product:
+            price = get_product_price(product)
+            item_total = price * quantity
+            subtotal += item_total
+            items.append({
+                'name': product['name'],
+                'quantity': quantity,
+                'price': price,
+                'total': item_total
+            })
+
+    discount = 0
+    if promo_code and promo_code in promocodes and promocodes[promo_code].get('active', True):
+        promo = promocodes[promo_code]
+        if promo['type'] == 'percent':
+            discount = subtotal * promo['discount'] / 100
+        else:
+            discount = min(promo['discount'], subtotal)
+
+    total = subtotal - discount
+
+    order_number = f"{datetime.now().strftime('%Y%m%d')}{random.randint(1000, 9999)}"
+
+    if promo_code and 'user_email' in session:
+        mark_promocode_used(session['user_email'], promo_code, order_number)
+
+    order_data = {
+        'order_number': order_number,
+        'datetime': datetime.now().strftime('%d.%m.%Y %H:%M:%S'),
+        'customer_name': customer_name,
+        'customer_email': customer_email,
+        'customer_phone': customer_phone,
+        'items': items,
+        'subtotal': subtotal,
+        'discount': discount,
+        'total': total,
+        'delivery_address': delivery_address,
+        'from_address': f"{OFFICE_COORDINATES['address']}",
+        'distance': distance,
+        'delivery_period': period_text,
+        'delivery_date': delivery_date,
+        'payment_method': 'cash'
+    }
+
+    if 'user_email' in session:
+        save_order_to_history(session['user_email'], order_data)
+
+    order_log = {
+        'order_number': order_number,
+        'customer': customer_name,
+        'email': customer_email,
+        'amount': total,
+        'timestamp': datetime.now().strftime('%d.%m.%Y %H:%M:%S'),
+        'address': delivery_address,
+        'distance': distance,
+        'delivery_date': delivery_date,
+        'payment_method': 'cash'
+    }
+
+    with open('orders_log.txt', 'a', encoding='utf-8') as f:
+        f.write(f"{json.dumps(order_log, ensure_ascii=False)}\n")
+
+    print(f"\n💰 ЗАКАЗ НАЛИЧНЫМИ ОФОРМЛЕН!")
+    print(f"📦 Заказ #{order_number}")
+    print(f"👤 Клиент: {customer_name}")
+    print(f"📧 Email: {customer_email}")
+    print(f"💵 Сумма к оплате при получении: {total:,} ₽")
+    print(f"📍 Адрес доставки: {delivery_address}")
+    print(f"📏 Расстояние: {distance} км")
+    print(f"🚚 Доставка: {period_text} (до {delivery_date})")
+
+    email_sent = send_receipt_email(order_data)
+
+    session.pop('cart', None)
+    session.pop('promo_code', None)
+
+    if email_sent:
+        return jsonify({
+            'message': f'✅ Заказ #{order_number} оформлен! Оплата {total:,} ₽ наличными при получении. Чек отправлен на {customer_email}.'})
+    else:
+        return jsonify({'message': f'✅ Заказ #{order_number} оформлен! Оплата {total:,} ₽ наличными при получении.'})
+
+@app.route('/api/admin/products', methods=['GET'])
+def admin_get_products():
+    if 'user_email' not in session or not is_admin(session['user_email']):
+        return jsonify({'error': 'Access denied'}), 403
+    products = load_products()
+    return jsonify(products)
+
+@app.route('/api/admin/add-product', methods=['POST'])
+def admin_add_product():
+    if 'user_email' not in session or not is_admin(session['user_email']):
+        return jsonify({'error': 'Access denied'}), 403
+
+    name = request.form.get('name')
+    price = request.form.get('price')
+    sale_price = request.form.get('sale_price')
+    discount_percent = request.form.get('discount_percent', '0')
+    description = request.form.get('description')
+    category = request.form.get('category', 'services')
+    image = request.files.get('image')
+
+    products = load_products()
+    new_id = max([p['id'] for p in products]) + 1 if products else 1
+
+    image_path = '/static/uploads/default.jpg'
+    if image:
+        filename = secure_filename(f"product_{new_id}_{image.filename}")
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        image.save(filepath)
+        image_path = f'/static/uploads/{filename}'
+
+    sale_price_val = None
+    discount_percent_val = int(discount_percent) if discount_percent else 0
+
+    if sale_price and int(sale_price) > 0:
+        sale_price_val = int(sale_price)
+        if discount_percent_val == 0 and int(price) > 0:
+            discount_percent_val = int((1 - int(sale_price) / int(price)) * 100)
+    elif discount_percent_val > 0 and int(price) > 0:
+        sale_price_val = int(int(price) * (1 - discount_percent_val / 100))
+
+    products.append({
+        'id': new_id,
+        'name': name,
+        'price': int(price),
+        'sale_price': sale_price_val,
+        'discount_percent': discount_percent_val,
+        'description': description,
+        'image': image_path,
+        'category': category
+    })
+    save_products(products)
+    return jsonify({'success': True})
+
+@app.route('/api/admin/edit-product', methods=['POST'])
+def admin_edit_product():
+    if 'user_email' not in session or not is_admin(session['user_email']):
+        return jsonify({'error': 'Access denied'}), 403
+
+    data = request.json
+    product_id = data.get('id')
+    name = data.get('name')
+    price = data.get('price')
+    sale_price = data.get('sale_price')
+    discount_percent = data.get('discount_percent', 0)
+    description = data.get('description')
+    category = data.get('category', 'services')
+
+    products = load_products()
+    for p in products:
+        if p['id'] == product_id:
+            p['name'] = name
+            p['price'] = price
+            p['sale_price'] = sale_price if sale_price and sale_price > 0 else None
+            p['discount_percent'] = discount_percent or 0
+            p['description'] = description
+            p['category'] = category
+            break
+    save_products(products)
+    return jsonify({'success': True})
+
+@app.route('/api/admin/delete-product', methods=['POST'])
+def admin_delete_product():
+    if 'user_email' not in session or not is_admin(session['user_email']):
+        return jsonify({'error': 'Access denied'}), 403
+
+    data = request.json
+    product_id = data.get('id')
+
+    products = load_products()
+    products = [p for p in products if p['id'] != product_id]
+    save_products(products)
+    return jsonify({'success': True})
+
+@app.route('/api/admin/news', methods=['GET'])
+def admin_get_news():
+    news = load_news()
+    return jsonify(news)
+
+@app.route('/api/admin/add-news', methods=['POST'])
+def admin_add_news():
+    if 'user_email' not in session or not is_admin(session['user_email']):
+        return jsonify({'error': 'Access denied'}), 403
+
+    title = request.form.get('title')
+    text = request.form.get('text')
+    fullText = request.form.get('fullText')
+    image = request.files.get('image')
+
+    news = load_news()
+    new_id = max([n['id'] for n in news]) + 1 if news else 1
+
+    image_path = '/static/uploads/default_news.jpg'
+    if image:
+        filename = secure_filename(f"news_{new_id}_{image.filename}")
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        image.save(filepath)
+        image_path = f'/static/uploads/{filename}'
+
+    news.append({
+        'id': new_id,
+        'date': datetime.now().strftime('%d.%m.%Y'),
+        'title': title,
+        'text': text,
+        'fullText': fullText,
+        'image': image_path
+    })
+    save_news(news)
+    return jsonify({'success': True})
+
+@app.route('/api/admin/edit-news', methods=['POST'])
+def admin_edit_news():
+    if 'user_email' not in session or not is_admin(session['user_email']):
+        return jsonify({'error': 'Access denied'}), 403
+
+    data = request.json
+    news_id = data.get('id')
+    title = data.get('title')
+    text = data.get('text')
+    fullText = data.get('fullText')
+
+    news = load_news()
+    for n in news:
+        if n['id'] == news_id:
+            n['title'] = title
+            n['text'] = text
+            n['fullText'] = fullText
+            break
+    save_news(news)
+    return jsonify({'success': True})
+
+@app.route('/api/admin/delete-news', methods=['POST'])
+def admin_delete_news():
+    if 'user_email' not in session or not is_admin(session['user_email']):
+        return jsonify({'error': 'Access denied'}), 403
+
+    data = request.json
+    news_id = data.get('id')
+
+    news = load_news()
+    news = [n for n in news if n['id'] != news_id]
+    save_news(news)
+    return jsonify({'success': True})
+
+@app.route('/api/admin/promocodes', methods=['GET'])
+def admin_get_promocodes():
+    if 'user_email' not in session or not is_admin(session['user_email']):
+        return jsonify({'error': 'Access denied'}), 403
+    promocodes = load_promocodes_list()
+    return jsonify(promocodes)
+
+@app.route('/api/promocodes', methods=['GET'])
+def get_promocodes():
+    promocodes = load_promocodes_list()
+    return jsonify(promocodes)
+
+@app.route('/api/admin/add-promocode', methods=['POST'])
+def admin_add_promocode():
+    if 'user_email' not in session or not is_admin(session['user_email']):
+        return jsonify({'error': 'Access denied'}), 403
+
+    data = request.json
+    code = data.get('code', '').upper()
+    type = data.get('type')
+    discount = data.get('discount')
+
+    if not code or not discount:
+        return jsonify({'success': False, 'message': 'Заполните все поля'})
+
+    promocodes = load_promocodes_list()
+    if code in promocodes:
+        return jsonify({'success': False, 'message': 'Промокод с таким кодом уже существует'})
+
+    promocodes[code] = {
+        'discount': discount,
+        'type': type,
+        'active': True
+    }
+    save_promocodes_list(promocodes)
+    return jsonify({'success': True})
+
+@app.route('/api/admin/toggle-promocode', methods=['POST'])
+def admin_toggle_promocode():
+    if 'user_email' not in session or not is_admin(session['user_email']):
+        return jsonify({'error': 'Access denied'}), 403
+
+    data = request.json
+    code = data.get('code', '').upper()
+
+    promocodes = load_promocodes_list()
+    if code in promocodes:
+        promocodes[code]['active'] = not promocodes[code]['active']
+        save_promocodes_list(promocodes)
+        status = 'включён' if promocodes[code]['active'] else 'отключён'
+        return jsonify({'success': True, 'message': f'Промокод {code} {status}'})
+    return jsonify({'success': False, 'message': 'Промокод не найден'})
+
+@app.route('/api/admin/delete-promocode', methods=['POST'])
+def admin_delete_promocode():
+    if 'user_email' not in session or not is_admin(session['user_email']):
+        return jsonify({'error': 'Access denied'}), 403
+
+    data = request.json
+    code = data.get('code', '').upper()
+
+    promocodes = load_promocodes_list()
+    if code in promocodes:
+        del promocodes[code]
+        save_promocodes_list(promocodes)
+        return jsonify({'success': True})
+    return jsonify({'success': False, 'message': 'Промокод не найден'})
+
+@app.route('/api/admin/delete-review', methods=['POST'])
+def admin_delete_review():
+    if 'user_email' not in session or not is_admin(session['user_email']):
+        return jsonify({'error': 'Access denied'}), 403
+
+    data = request.json
+    index = data.get('index')
+
+    reviews = load_reviews()
+    if 0 <= index < len(reviews):
+        reviews.pop(index)
+        save_reviews(reviews)
+        return jsonify({'success': True})
+    return jsonify({'success': False, 'message': 'Отзыв не найден'})
+
+@app.route('/api/admin/orders', methods=['GET'])
+def admin_get_orders():
+    if 'user_email' not in session or not is_admin(session['user_email']):
+        return jsonify({'error': 'Access denied'}), 403
+    orders = load_orders()
+    return jsonify(orders)
+
+@app.route('/api/admin/users', methods=['GET'])
+def admin_get_users():
+    if 'user_email' not in session or not is_admin(session['user_email']):
+        return jsonify({'error': 'Access denied'}), 403
+    users = load_users()
+    return jsonify(users)
+
+@app.route('/api/admin/make-admin', methods=['POST'])
+def admin_make_admin():
+    if 'user_email' not in session or not is_admin(session['user_email']):
+        return jsonify({'error': 'Access denied'}), 403
+
+    data = request.json
+    email = data.get('email')
+
+    users = load_users()
+    email_lower = email.lower()
+    if email_lower in users:
+        users[email_lower]['is_admin'] = True
+        save_users(users)
+        return jsonify({'success': True})
+    return jsonify({'success': False, 'message': 'Пользователь не найден'})
+
+@app.route('/api/admin/ban-user', methods=['POST'])
+def ban_user_route():
+    if 'user_email' not in session or not is_admin(session['user_email']):
+        return jsonify({'error': 'Access denied'}), 403
+
+    data = request.json
+    email = data.get('email')
+    duration_minutes = data.get('duration_minutes')
+    reason = data.get('reason', 'Нарушение правил')
+    message = data.get('message', 'Обратитесь к администратору для уточнения деталей')
+
+    if not email or not duration_minutes:
+        return jsonify({'success': False, 'message': 'Не указан email или срок бана'})
+
+    banned_users = load_banned_users()
+    ban_until = datetime.now() + timedelta(minutes=duration_minutes)
+
+    banned_users[email.lower()] = {
+        'banned_at': datetime.now().isoformat(),
+        'ban_until': ban_until.isoformat(),
+        'duration_minutes': duration_minutes,
+        'reason': reason,
+        'message': message
+    }
+
+    save_banned_users(banned_users)
+
+    if 'user_email' in session and session['user_email'].lower() == email.lower():
+        session.clear()
+
+    return jsonify(
+        {'success': True, 'message': f'Пользователь {email} забанен до {ban_until.strftime("%d.%m.%Y %H:%M:%S")}'})
+
+@app.route('/api/admin/unban-user', methods=['POST'])
+def unban_user_route():
+    if 'user_email' not in session or not is_admin(session['user_email']):
+        return jsonify({'error': 'Access denied'}), 403
+
+    data = request.json
+    email = data.get('email')
+
+    if not email:
+        return jsonify({'success': False, 'message': 'Не указан email'})
+
+    banned_users = load_banned_users()
+    if email.lower() in banned_users:
+        del banned_users[email.lower()]
+        save_banned_users(banned_users)
+        return jsonify({'success': True, 'message': f'Бан снят с {email}'})
+
+    return jsonify({'success': False, 'message': 'Пользователь не забанен'})
 
 if __name__ == '__main__':
     # Создаем необходимые директории
