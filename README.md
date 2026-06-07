@@ -1,2 +1,0 @@
-Добавлен requirements.txt
-gunicorn
