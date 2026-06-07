@@ -739,6 +739,11 @@ OFFICE_COORDINATES = {
 }
 
 
+# ============ ДОБАВЬТЕ ЭТОТ КОД СЮДА ============
+@app.route('/')
+def index():
+    return render_template_string(HTML_TEMPLATE)
+
 # СТРАНИЦА "САЙТ НЕДОСТУПЕН" (503 ошибка)
 @app.errorhandler(503)
 def service_unavailable(e):
