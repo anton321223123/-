@@ -584,7 +584,7 @@ def delete_password_reset(email):
         save_password_reset_codes(reset_codes)
 
 
-def register_user(email, password, full_name, phone):
+def register_user(email, password, full_name, phone, birth_date):
     users = load_users()
     email_lower = email.lower()
     if email_lower in users:
@@ -595,6 +595,7 @@ def register_user(email, password, full_name, phone):
         'password': hash_password(password),
         'full_name': full_name,
         'phone': phone,
+        'birth_date': birth_date,
         'registered_at': datetime.now().strftime('%d.%m.%Y %H:%M:%S'),
         'addresses': [],
         'profile_complete': True,
@@ -604,12 +605,13 @@ def register_user(email, password, full_name, phone):
     return True, "Регистрация успешна"
 
 
-def update_user_profile(email, full_name, phone):
+def update_user_profile(email, full_name, phone, birth_date):
     users = load_users()
     email_lower = email.lower()
     if email_lower in users:
         users[email_lower]['full_name'] = full_name
         users[email_lower]['phone'] = phone
+        users[email_lower]['birth_date'] = birth_date
         users[email_lower]['profile_complete'] = True
         save_users(users)
         return True
@@ -726,11 +728,12 @@ def get_product_price(product):
 
 
 EMAIL_CONFIG = {
-    'smtp_server': 'smtp.mail.ru',
-    'smtp_port': 465,
+    'smtp_server': 'smtp.zetta22.ru',  # Или mail.zetta22.ru
+    'smtp_port': 465,  # Или 587 для TLS
     'email': 'zetta_report@zetta22.ru',
     'password': 'Wertyxa120208'
 }
+
 
 OFFICE_COORDINATES = {
     'lat': 53.3543,
@@ -1224,6 +1227,7 @@ def auth_status():
                 'full_name': user.get('full_name', ''),
                 'email': user.get('email', ''),
                 'phone': user.get('phone', ''),
+                'birth_date': user.get('birth_date', ''),
                 'registered_at': user.get('registered_at', '')
             },
             'is_admin': user.get('is_admin', False)
@@ -1262,11 +1266,12 @@ def update_profile():
     data = request.json
     full_name = data.get('full_name')
     phone = data.get('phone')
+    birth_date = data.get('birth_date', '')
 
     if not full_name or not phone:
         return jsonify({'success': False, 'message': 'Заполните все поля'})
 
-    if update_user_profile(session['user_email'], full_name, phone):
+    if update_user_profile(session['user_email'], full_name, phone, birth_date):
         session['user_name'] = full_name
         return jsonify({'success': True})
     return jsonify({'success': False, 'message': 'Ошибка при обновлении профиля'})
@@ -1417,6 +1422,7 @@ def get_user_profile():
         'full_name': user.get('full_name', ''),
         'email': user.get('email', ''),
         'phone': user.get('phone', ''),
+        'birth_date': user.get('birth_date', ''),
         'registered_at': user.get('registered_at', '')
     })
 
@@ -5344,6 +5350,10 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
                         <div class="profile-value" id="profilePhone"></div>
                     </div>
                     <div class="profile-field">
+    <div class="profile-label">Дата рождения</div>
+    <div class="profile-value" id="profileBirthDate"></div>
+</div>
+                    <div class="profile-field">
                         <div class="profile-label">Дата регистрации</div>
                         <div class="profile-value" id="profileRegistered"></div>
                     </div>
@@ -5658,7 +5668,8 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
             <input type="text" id="profileFullNameInput" class="auth-input" style="width: 100%; margin-bottom: 1rem;" placeholder="ФИО *">
             <input type="email" id="profileEmailInput" class="auth-input" style="width: 100%; margin-bottom: 1rem;" placeholder="Email *" readonly>
             <input type="tel" id="profilePhoneInput" class="auth-input" style="width: 100%; margin-bottom: 1rem;" placeholder="Телефон *">
-            <button class="auth-btn" onclick="saveProfile()" style="width: 100%;">Сохранить</button>
+<input type="date" id="profileBirthDateInput" class="auth-input" style="width: 100%; margin-bottom: 1rem;" placeholder="Дата рождения">
+<button class="auth-btn" onclick="saveProfile()" style="width: 100%;">Сохранить</button>
         </div>
     </div>
 
@@ -5703,9 +5714,10 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
                 <input type="text" id="regFullName" class="auth-input" placeholder="ФИО" required>
                 <input type="email" id="regEmail" class="auth-input" placeholder="Email" required>
                 <input type="tel" id="regPhone" class="auth-input" placeholder="Телефон" required>
-                <input type="password" id="regPassword" class="auth-input" placeholder="Пароль" required>
-                <input type="password" id="regConfirmPassword" class="auth-input" placeholder="Подтверждение пароля" required>
-                <button class="auth-btn" onclick="sendVerificationCode()">Зарегистрироваться</button>
+            <input type="date" id="regBirthDate" class="auth-input" placeholder="Дата рождения">
+            <input type="password" id="regPassword" class="auth-input" placeholder="Пароль" required>
+            <input type="password" id="regConfirmPassword" class="auth-input" placeholder="Подтверждение пароля" required>
+            <button class="auth-btn" onclick="register()">Зарегистрироваться</button>
             </div>
         </div>
     </div>
@@ -6773,9 +6785,9 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
                                     <div class="admin-user-info">
                                         <div class="admin-user-email">${escapeHtml(u.email)}</div>
                                         <div class="admin-user-details">
-                                            ФИО: ${escapeHtml(u.full_name || '-')} | Телефон: ${escapeHtml(u.phone || '-')} | Регистрация: ${u.registered_at || '-'}
-                                            ${u.is_admin ? ' | 👑 Администратор' : ''}
-                                        </div>
+    ФИО: ${escapeHtml(u.full_name || '-')} | Телефон: ${escapeHtml(u.phone || '-')} | Дата рождения: ${escapeHtml(u.birth_date || '-')} | Регистрация: ${u.registered_at || '-'}
+    ${u.is_admin ? ' | 👑 Администратор' : ''}
+</div>
                                     </div>
                                     <div class="admin-user-actions">
                                         ${!u.is_admin ? `<button class="edit-btn" onclick="makeAdmin('${u.email}')">Сделать админом</button>` : ''}
@@ -7010,57 +7022,48 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
             }
         }
 
-        function sendVerificationCode() {
-            const fullName = document.getElementById('regFullName').value;
-            const email = document.getElementById('regEmail').value;
-            const phone = document.getElementById('regPhone').value;
-            const password = document.getElementById('regPassword').value;
-            const confirmPassword = document.getElementById('regConfirmPassword').value;
+        function register() {
+    const fullName = document.getElementById('regFullName').value;
+    const email = document.getElementById('regEmail').value;
+    const phone = document.getElementById('regPhone').value;
+    const birthDate = document.getElementById('regBirthDate').value;
+    const password = document.getElementById('regPassword').value;
+    const confirmPassword = document.getElementById('regConfirmPassword').value;
 
-            if (!fullName || !email || !phone || !password) {
-                alert('Заполните все поля');
-                return;
-            }
+    if (!fullName || !email || !phone || !password) {
+        alert('Заполните все обязательные поля');
+        return;
+    }
+    if (password !== confirmPassword) {
+        alert('Пароли не совпадают');
+        return;
+    }
+    if (password.length < 6) {
+        alert('Пароль должен быть не менее 6 символов');
+        return;
+    }
 
-            if (password !== confirmPassword) {
-                alert('Пароли не совпадают');
-                return;
-            }
-
-            if (password.length < 6) {
-                alert('Пароль должен содержать не менее 6 символов');
-                return;
-            }
-
-            fetch('/api/send-verification', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({
-                    email: email,
-                    full_name: fullName,
-                    phone: phone,
-                    password: password
-                })
-            }).then(res => res.json()).then(data => {
-                if (data.success) {
-                    pendingRegistration = {
-                        email: email,
-                        full_name: fullName,
-                        phone: phone,
-                        password: password
-                    };
-                    document.getElementById('verifyEmailDisplay').innerHTML = email;
-                    document.getElementById('verifyModal').style.display = 'block';
-                    document.getElementById('verifyCode').value = '';
-
-                    startTimer(300, (seconds) => updateTimerDisplay(seconds), () => {
-                        document.getElementById('verifyTimer').innerHTML = 'Код истёк. Запросите новый.';
-                    });
-                } else {
-                    alert(data.message);
-                }
-            });
+    fetch('/api/register', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            full_name: fullName,
+            email: email,
+            phone: phone,
+            birth_date: birthDate,
+            password: password
+        })
+    }).then(res => res.json()).then(data => {
+        if (data.success) {
+            alert('Регистрация успешна!');
+            closeAuthModal();
+            checkAuthStatus();
+            goToHome();
+        } else {
+            alert(data.message);
         }
+    });
+}
 
         function verifyCode() {
             const code = document.getElementById('verifyCode').value;
@@ -7126,34 +7129,36 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
                 });
         }
 
-        function saveProfile() {
-            const fullName = document.getElementById('profileFullNameInput').value;
-            const phone = document.getElementById('profilePhoneInput').value;
+       function saveProfile() {
+    const fullName = document.getElementById('profileFullNameInput').value;
+    const phone = document.getElementById('profilePhoneInput').value;
+    const birthDate = document.getElementById('profileBirthDateInput').value;
 
-            if (!fullName || !phone) {
-                alert('Заполните все поля');
-                return;
-            }
+    if (!fullName || !phone) {
+        alert('Заполните все поля');
+        return;
+    }
 
-            fetch('/api/update-profile', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({
-                    full_name: fullName,
-                    phone: phone
-                })
-            }).then(res => res.json()).then(data => {
-                if (data.success) {
-                    document.getElementById('profileFormModal').style.display = 'none';
-                    alert('Профиль успешно обновлён!');
-                    checkAuthStatus();
-                    loadProfile();
-                    loadOrdersHistory();
-                } else {
-                    alert('Ошибка при сохранении профиля');
-                }
-            });
+    fetch('/api/update-profile', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            full_name: fullName,
+            phone: phone,
+            birth_date: birthDate
+        })
+    }).then(res => res.json()).then(data => {
+        if (data.success) {
+            document.getElementById('profileFormModal').style.display = 'none';
+            alert('Профиль успешно обновлён!');
+            checkAuthStatus();
+            loadProfile();
+            loadOrdersHistory();
+        } else {
+            alert('Ошибка при сохранении профиля');
         }
+    });
+}
 
         window.onclick = function(event) {
             const modal = document.getElementById('newsModal');
@@ -7339,7 +7344,28 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
                     goToHome();
                 });
         }
+@app.route('/api/register', methods=['POST'])
+def api_register():
+    data = request.json
+    email = data.get('email')
+    password = data.get('password')
+    full_name = data.get('full_name')
+    phone = data.get('phone')
+    birth_date = data.get('birth_date', '')
 
+    if not email or not password or not full_name or not phone:
+        return jsonify({'success': False, 'message': 'Заполните все поля'})
+
+    if len(password) < 6:
+        return jsonify({'success': False, 'message': 'Пароль должен быть не менее 6 символов'})
+
+    success, message = register_user(email, password, full_name, phone, birth_date)
+    
+    if success:
+        login_user(email, password)
+        return jsonify({'success': True, 'message': message})
+    return jsonify({'success': False, 'message': message})
+    
         function goToProfile() {
             if (!isLoggedIn) {
                 showAuthModal();
@@ -7372,15 +7398,16 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
         }
 
         function loadProfile() {
-            fetch('/api/user/profile')
-                .then(res => res.json())
-                .then(data => {
-                    document.getElementById('profileFullName').innerHTML = data.full_name;
-                    document.getElementById('profileEmail').innerHTML = data.email;
-                    document.getElementById('profilePhone').innerHTML = data.phone;
-                    document.getElementById('profileRegistered').innerHTML = data.registered_at;
-                });
-        }
+    fetch('/api/user/profile')
+        .then(res => res.json())
+        .then(data => {
+            document.getElementById('profileFullName').innerHTML = data.full_name;
+            document.getElementById('profileEmail').innerHTML = data.email;
+            document.getElementById('profilePhone').innerHTML = data.phone;
+            document.getElementById('profileBirthDate').innerHTML = data.birth_date || 'Не указана';
+            document.getElementById('profileRegistered').innerHTML = data.registered_at;
+        });
+}
 
         function loadOrdersHistory() {
             fetch('/api/user/orders')
@@ -7420,11 +7447,12 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
         }
 
         function editProfile() {
-            document.getElementById('profileFullNameInput').value = document.getElementById('profileFullName').innerHTML;
-            document.getElementById('profileEmailInput').value = document.getElementById('profileEmail').innerHTML;
-            document.getElementById('profilePhoneInput').value = document.getElementById('profilePhone').innerHTML;
-            document.getElementById('profileFormModal').style.display = 'block';
-        }
+    document.getElementById('profileFullNameInput').value = document.getElementById('profileFullName').innerHTML;
+    document.getElementById('profileEmailInput').value = document.getElementById('profileEmail').innerHTML;
+    document.getElementById('profilePhoneInput').value = document.getElementById('profilePhone').innerHTML;
+    document.getElementById('profileBirthDateInput').value = document.getElementById('profileBirthDate').innerHTML === 'Не указана' ? '' : document.getElementById('profileBirthDate').innerHTML;
+    document.getElementById('profileFormModal').style.display = 'block';
+}
 
         function goToHome() {
             currentPage = 'home';
@@ -8011,6 +8039,7 @@ if __name__ == '__main__':
             'password': hash_password('admin123'),
             'full_name': 'Администратор Zetta',
             'phone': '+7 (999) 999-99-99',
+            'birth_date': '1990-01-01',
             'registered_at': datetime.now().strftime('%d.%m.%Y %H:%M:%S'),
             'addresses': [],
             'profile_complete': True,
