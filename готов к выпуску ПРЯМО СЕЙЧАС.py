@@ -7812,5 +7812,6 @@ if __name__ == '__main__':
         print(f"Пароль: admin123")
         print("=" * 50)
 
+    app.run(host='0.0.0.0', port=5000)
     # Строку ниже УДАЛИТЬ или ЗАКОММЕНТИРОВАТЬ
     # app.run(debug=True, port=5000)
