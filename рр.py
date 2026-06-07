@@ -7777,7 +7777,6 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
 </html>{% endraw %}
 '''
 
-
 if __name__ == '__main__':
     users = load_users()
     admin_email = 'admin@zetta.ru'
@@ -7807,6 +7806,5 @@ if __name__ == '__main__':
         print(f"Пароль: admin123")
         print("=" * 50)
 
-    # Запускаем только при локальном запуске, а не на сервере
-    import os
-    if os.environ.get('FLASK_ENV') != 'production':
+    # Строку ниже УДАЛИТЬ или ЗАКОММЕНТИРОВАТЬ
+    # app.run(debug=True, port=5000)
