@@ -7810,4 +7810,3 @@ if __name__ == '__main__':
     # Запускаем только при локальном запуске, а не на сервере
     import os
     if os.environ.get('FLASK_ENV') != 'production':
-        app.run(debug=True, port=5000)
