@@ -10,13 +10,20 @@ import hashlib
 import shutil
 from werkzeug.utils import secure_filename
 from functools import wraps
+import logging
 
 app = Flask(__name__)
 app.secret_key = 'secret_key_for_zetta_12345'
 app.config['UPLOAD_FOLDER'] = 'static/uploads'
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 
+# Настройка логирования
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Создание необходимых директорий
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+os.makedirs('static', exist_ok=True)
 
 REVIEWS_FILE = 'reviews.json'
 USERS_FILE = 'users.json'
@@ -374,8 +381,7 @@ def send_verification_email(email, code, type='registration'):
 
         msg.attach(MIMEText(html_content, 'html', 'utf-8'))
 
-        server = smtplib.SMTP(EMAIL_CONFIG['smtp_server'], EMAIL_CONFIG['smtp_port'])
-        server.starttls()
+        server = smtplib.SMTP_SSL(EMAIL_CONFIG['smtp_server'], EMAIL_CONFIG['smtp_port'])
         server.login(EMAIL_CONFIG['email'], EMAIL_CONFIG['password'])
         server.send_message(msg)
         server.quit()
@@ -413,8 +419,7 @@ def send_operator_request_email(user_name, user_phone, user_email):
 
         msg.attach(MIMEText(html_content, 'html', 'utf-8'))
 
-        server = smtplib.SMTP(EMAIL_CONFIG['smtp_server'], EMAIL_CONFIG['smtp_port'])
-        server.starttls()
+        server = smtplib.SMTP_SSL(EMAIL_CONFIG['smtp_server'], EMAIL_CONFIG['smtp_port'])
         server.login(EMAIL_CONFIG['email'], EMAIL_CONFIG['password'])
         server.send_message(msg)
         server.quit()
@@ -435,7 +440,6 @@ def send_receipt_email(order_data):
         payment_method_text = "Банковская карта (онлайн)" if order_data[
                                                                  'payment_method'] == 'card' else "Наличными при получении"
 
-        # Исправленная строка - разбиваем на части чтобы избежать проблем с кавычками
         items_html = ''
         for item in order_data['items']:
             discount_style = 'color:#e74c3c; font-weight:bold;' if item.get('sale_price') and item['price'] != item.get(
@@ -531,8 +535,7 @@ def send_receipt_email(order_data):
 
         msg.attach(MIMEText(html_content, 'html', 'utf-8'))
 
-        server = smtplib.SMTP(EMAIL_CONFIG['smtp_server'], EMAIL_CONFIG['smtp_port'])
-        server.starttls()
+        server = smtplib.SMTP_SSL(EMAIL_CONFIG['smtp_server'], EMAIL_CONFIG['smtp_port'])
         server.login(EMAIL_CONFIG['email'], EMAIL_CONFIG['password'])
         server.send_message(msg)
         server.quit()
@@ -731,8 +734,8 @@ def get_product_price(product):
 
 EMAIL_CONFIG = {
     'smtp_server': 'smtp.mail.ru',
-    'smtp_port': 587,
-    'email': 'vaincode@mail.ru',
+    'smtp_port': 465,
+    'email': 'zetta_report@zetta22.ru',
     'password': '7lvM92oEvTGdieqUCwGM'
 }
 
@@ -1006,7 +1009,7 @@ def ban_page():
 
                 <p style="color: #888; font-size: 0.85rem;">
                     Если вы считаете, что это ошибка, свяжитесь с нами по почте 
-                    <a href="mailto:vaincode@mail.ru" class="contact-link">vaincode@mail.ru</a>
+                    <a href="mailto:zetta_report@zetta22.ru" class="contact-link">zetta_report@zetta22.ru</a>
                 </p>
 
                 <button class="back-btn" onclick="window.location.href='/'">🔙 Вернуться на главную</button>
@@ -1117,7 +1120,7 @@ def cooperation():
     if 'user_email' not in session:
         return jsonify({'success': False, 'message': 'Не авторизован'}), 401
 
-    response = "По вопросам рекламы и сотрудничества пишите нам на почту vaincode@mail.ru или можете позвонить по номеру телефона 89520062357."
+    response = "По вопросам рекламы и сотрудничества пишите нам на почту zetta_report@zetta22.ru или можете позвонить по номеру телефона 89520062357."
 
     return jsonify({
         'success': True,
@@ -1195,8 +1198,7 @@ def send_feedback():
 
         msg.attach(MIMEText(html_content, 'html', 'utf-8'))
 
-        server = smtplib.SMTP(EMAIL_CONFIG['smtp_server'], EMAIL_CONFIG['smtp_port'])
-        server.starttls()
+        server = smtplib.SMTP_SSL(EMAIL_CONFIG['smtp_server'], EMAIL_CONFIG['smtp_port'])
         server.login(EMAIL_CONFIG['email'], EMAIL_CONFIG['password'])
         server.send_message(msg)
         server.quit()
@@ -2175,6 +2177,7 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Zetta | Профессиональная сборка ПК и IT-услуги</title>
     <style>
+        /* Все стили остаются без изменений */
         * {
             margin: 0;
             padding: 0;
@@ -2285,7 +2288,6 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
             animation: pulse 0.3s ease-in-out;
         }
 
-        /* Анимации для появления элементов */
         .fade-up {
             animation: fadeInUp 0.6s ease-out forwards;
         }
@@ -2439,7 +2441,6 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
             width: 100%;
         }
 
-        /* Поисковая строка на всю ширину */
         .search-bar-full {
             background: #0f0f0f;
             border-top: 1px solid #2a2a2a;
@@ -2543,7 +2544,6 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
             flex: 1;
         }
 
-        /* Боковая панель категорий - только для каталога */
         .catalog-page-wrapper {
             display: flex;
             gap: 2rem;
@@ -3569,7 +3569,6 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
             line-height: 1.5;
         }
 
-        /* Стили для влога */
         .vlog-section {
             background: #0f0f0f;
             border: 1px solid #2a2a2a;
@@ -3611,7 +3610,6 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
             transform: scale(1.02);
         }
 
-        /* Модальное окно для предложений */
         .feedback-modal {
             display: none;
             position: fixed;
@@ -4607,7 +4605,6 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
             color: #229954;
         }
 
-        /* Стили для чата-помощника с кнопками */
         .chat-button {
             position: fixed;
             bottom: 20px;
@@ -4755,7 +4752,6 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
             transform: translateY(-2px);
         }
 
-        /* ФУТЕР В ОДНУ СТРОКУ */
         .footer {
             background: #0a0a0a;
             border-top: 1px solid #2a2a2a;
@@ -4877,7 +4873,6 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
                 <span class="cart-count" id="cartCount">0</span>
             </div>
         </div>
-        <!-- Поисковая строка на всю ширину, под навигацией, всегда пустая -->
         <div class="search-bar-full">
             <div class="search-container">
                 <input type="text" class="search-input-full" id="searchInput" placeholder="Поиск услуг..." value="">
@@ -4893,13 +4888,11 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
                 <p>Ваш надёжный партнёр в мире IT-технологий</p>
             </div>
 
-            <!-- 1. Активные промокоды -->
             <div class="promo-section">
                 <div class="promo-title">Активные промокоды</div>
                 <div class="promo-codes" id="promoCodes"></div>
             </div>
 
-            <!-- 2. НАША КОМАНДА -->
             <div class="team-section">
                 <div class="team-title">★ НАША КОМАНДА ★</div>
                 <div class="team-grid">
@@ -4924,7 +4917,6 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
                 </div>
             </div>
 
-            <!-- 3. НАШ БЛОГ / ВЛОГ -->
             <div class="vlog-section">
                 <div class="team-title">★ НАШ БЛОГ / ВЛОГ ★</div>
                 <div class="vlog-content">
@@ -4933,7 +4925,6 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
                 </div>
             </div>
 
-            <!-- 4. НОВОСТИ КОМПАНИИ -->
             <div class="news-carousel-section" id="newsCarouselSection">
                 <div class="team-title">★ НОВОСТИ КОМПАНИИ ★</div>
                 <button class="admin-add-btn" id="addNewsBtn" onclick="showAddNewsModal()" style="display: none;">+</button>
@@ -4945,7 +4936,6 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
                 <div class="carousel-dots" id="carouselDots"></div>
             </div>
 
-            <!-- 5. ОТЗЫВЫ НАШИХ КЛИЕНТОВ -->
             <div class="reviews-section" id="homeReviewsSection">
                 <div class="reviews-title">★ ОТЗЫВЫ НАШИХ КЛИЕНТОВ ★</div>
                 <div class="home-reviews-grid" id="homeReviewsGrid">
@@ -5038,7 +5028,7 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
                     <div class="contact-card">
                         <div class="contact-icon">✉️</div>
                         <div class="contact-title">EMAIL</div>
-                        <div class="contact-value">vaincode@mail.ru</div>
+                        <div class="contact-value">zetta_report@zetta22.ru</div>
                     </div>
                     <div class="contact-card">
                         <div class="contact-icon">🕐</div>
@@ -5069,7 +5059,7 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
                     <p style="margin-bottom: 1rem;"><strong>1. Сбор информации</strong><br>Мы собираем информацию, которую вы предоставляете добровольно при регистрации, оформлении заказа или обращении в службу поддержки: имя, email, номер телефона, адрес доставки.</p>
                     <p style="margin-bottom: 1rem;"><strong>2. Использование информации</strong><br>Ваши данные используются исключительно для обработки заказов, доставки товаров и информирования о статусе заказа. Мы не передаём ваши данные третьим лицам без вашего согласия.</p>
                     <p style="margin-bottom: 1rem;"><strong>3. Защита данных</strong><br>Мы принимаем все необходимые меры для защиты ваших персональных данных от несанкционированного доступа, изменения, раскрытия или уничтожения.</p>
-                    <p><strong>4. Контактная информация</strong><br>По всем вопросам, связанным с обработкой персональных данных, вы можете обратиться по email: <a href="mailto:vaincode@mail.ru" style="color: #27ae60;">vaincode@mail.ru</a></p>
+                    <p><strong>4. Контактная информация</strong><br>По всем вопросам, связанным с обработкой персональных данных, вы можете обратиться по email: <a href="mailto:zetta_report@zetta22.ru" style="color: #27ae60;">zetta_report@zetta22.ru</a></p>
                 </div>
 
                 <div class="admin-form" style="margin-bottom: 0;">
@@ -5097,7 +5087,7 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
 
                     <div style="margin-bottom: 1.5rem;">
                         <p style="color: #27ae60; margin-bottom: 0.5rem;"><strong>Как связаться со службой поддержки?</strong></p>
-                        <p style="color: #888;">Вы можете связаться с нами по телефону <strong style="color: #27ae60;">+7 (952) 006-23-57</strong> или <strong style="color: #27ae60;">+7 (913) 244-77-07</strong>, или отправить письмо на <a href="mailto:vaincode@mail.ru" style="color: #27ae60;">vaincode@mail.ru</a>. Мы работаем ежедневно с 09:00 до 21:00.</p>
+                        <p style="color: #888;">Вы можете связаться с нами по телефону <strong style="color: #27ae60;">+7 (952) 006-23-57</strong> или <strong style="color: #27ae60;">+7 (913) 244-77-07</strong>, или отправить письмо на <a href="mailto:zetta_report@zetta22.ru" style="color: #27ae60;">zetta_report@zetta22.ru</a>. Мы работаем ежедневно с 09:00 до 21:00.</p>
                     </div>
                 </div>
             </div>
@@ -5313,13 +5303,12 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
         </div>
     </div>
 
-    <!-- ФУТЕР В ОДНУ СТРОКУ -->
     <footer class="footer">
         <div class="footer-content">
             <div class="footer-section">
                 <a href="tel:+79520062357">📞 +7 (952) 006-23-57</a>
                 <a href="tel:+79132447707">📞 +7 (913) 244-77-07</a>
-                <a href="mailto:vaincode@mail.ru">✉️ vaincode@mail.ru</a>
+                <a href="mailto:zetta_report@zetta22.ru">✉️ zetta_report@zetta22.ru</a>
                 <span>📍 г. Барнаул, ул. Юрина, 182/7</span>
             </div>
             <div class="footer-section">
@@ -5334,10 +5323,8 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
         </div>
     </footer>
 
-    <!-- Кнопка чата -->
     <button class="chat-button" id="chatButton" onclick="toggleChat()">💬</button>
 
-    <!-- Окно чата-помощника -->
     <div class="chat-window" id="chatWindow">
         <div class="chat-header">
             <h3>Чат поддержки Zetta</h3>
@@ -5355,7 +5342,6 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
         </div>
     </div>
 
-    <!-- Модальное окно для отправки предложения/жалобы -->
     <div id="feedbackModal" class="feedback-modal">
         <div class="feedback-container">
             <h3>📝 Предложения и жалобы</h3>
@@ -5532,7 +5518,6 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
         let currentCategory = 'all';
         let currentSearchTerm = '';
 
-        // Функция анимации полёта товара в корзину
         function animateToCart(element) {
             const cartIcon = document.getElementById('cartIcon');
             const rect = element.getBoundingClientRect();
@@ -5556,7 +5541,6 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
             }, 600);
         }
 
-        // Функции чата-помощника
         function toggleChat() {
             const win = document.getElementById('chatWindow');
             win.classList.toggle('open');
@@ -5763,7 +5747,6 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
             messagesArea.scrollTop = messagesArea.scrollHeight;
         }
 
-        // Функции для влога
         function loadVlog() {
             fetch('/api/vlog')
                 .then(res => res.json())
@@ -5797,7 +5780,6 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
                 });
         }
 
-        // Функции для предложений/жалоб
         function openFeedbackModal() {
             document.getElementById('feedbackModal').style.display = 'block';
             document.getElementById('feedbackMessage').value = '';
@@ -7777,11 +7759,11 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
 </html>{% endraw %}
 '''
 
-@app.route('/health')
-def health_check():
-    return 'OK', 200
-
 if __name__ == '__main__':
+    # Создаем необходимые директории
+    os.makedirs('static', exist_ok=True)
+    os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+    
     users = load_users()
     admin_email = 'admin@zetta.ru'
     admin_exists = False
@@ -7809,8 +7791,10 @@ if __name__ == '__main__':
         print(f"Email: {admin_email}")
         print(f"Пароль: admin123")
         print("=" * 50)
-        app.run(debug=0.0.0.0, port=5000)
-
-    # Запускаем только при локальном запуске, а не на сервере
-    import os
-    if os.environ.get('FLASK_ENV') != 'production':
+    
+    # Запуск сервера для хостинга
+    port = int(os.environ.get('PORT', 5000))
+    host = '0.0.0.0'
+    
+    print(f"Запуск сервера на {host}:{port}")
+    app.run(host=host, port=port, debug=False)
