@@ -732,8 +732,8 @@ def get_product_price(product):
 EMAIL_CONFIG = {
     'smtp_server': 'smtp.mail.ru',
     'smtp_port': 587,
-    'email': 'vaincode@mail.ru',
-    'password': '7lvM92oEvTGdieqUCwGM'
+    'email': 'zetta_report@zetta22.ru',
+    'password': '7lvM92oEvTGdieqUCwGM'  # Пожалуйста, обновите пароль на новый для этой почты
 }
 
 OFFICE_COORDINATES = {
@@ -1006,7 +1006,7 @@ def ban_page():
 
                 <p style="color: #888; font-size: 0.85rem;">
                     Если вы считаете, что это ошибка, свяжитесь с нами по почте 
-                    <a href="mailto:vaincode@mail.ru" class="contact-link">vaincode@mail.ru</a>
+                    <a href="mailto:zetta_report@zetta22.ru" class="contact-link">zetta_report@zetta22.ru</a>
                 </p>
 
                 <button class="back-btn" onclick="window.location.href='/'">🔙 Вернуться на главную</button>
@@ -1117,7 +1117,7 @@ def cooperation():
     if 'user_email' not in session:
         return jsonify({'success': False, 'message': 'Не авторизован'}), 401
 
-    response = "По вопросам рекламы и сотрудничества пишите нам на почту vaincode@mail.ru или можете позвонить по номеру телефона 89520062357."
+    response = "По вопросам рекламы и сотрудничества пишите нам на почту zetta_report@zetta22.ru или можете позвонить по номеру телефона 89520062357."
 
     return jsonify({
         'success': True,
@@ -5038,7 +5038,7 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
                     <div class="contact-card">
                         <div class="contact-icon">✉️</div>
                         <div class="contact-title">EMAIL</div>
-                        <div class="contact-value">vaincode@mail.ru</div>
+                        <div class="contact-value">zetta_report@zetta22.ru</div>
                     </div>
                     <div class="contact-card">
                         <div class="contact-icon">🕐</div>
@@ -5069,7 +5069,7 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
                     <p style="margin-bottom: 1rem;"><strong>1. Сбор информации</strong><br>Мы собираем информацию, которую вы предоставляете добровольно при регистрации, оформлении заказа или обращении в службу поддержки: имя, email, номер телефона, адрес доставки.</p>
                     <p style="margin-bottom: 1rem;"><strong>2. Использование информации</strong><br>Ваши данные используются исключительно для обработки заказов, доставки товаров и информирования о статусе заказа. Мы не передаём ваши данные третьим лицам без вашего согласия.</p>
                     <p style="margin-bottom: 1rem;"><strong>3. Защита данных</strong><br>Мы принимаем все необходимые меры для защиты ваших персональных данных от несанкционированного доступа, изменения, раскрытия или уничтожения.</p>
-                    <p><strong>4. Контактная информация</strong><br>По всем вопросам, связанным с обработкой персональных данных, вы можете обратиться по email: <a href="mailto:vaincode@mail.ru" style="color: #27ae60;">vaincode@mail.ru</a></p>
+                    <p><strong>4. Контактная информация</strong><br>По всем вопросам, связанным с обработкой персональных данных, вы можете обратиться по email: <a href="mailto:zetta_report@zetta22.ru" style="color: #27ae60;">zetta_report@zetta22.ru</a></p>
                 </div>
 
                 <div class="admin-form" style="margin-bottom: 0;">
@@ -5097,7 +5097,7 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
 
                     <div style="margin-bottom: 1.5rem;">
                         <p style="color: #27ae60; margin-bottom: 0.5rem;"><strong>Как связаться со службой поддержки?</strong></p>
-                        <p style="color: #888;">Вы можете связаться с нами по телефону <strong style="color: #27ae60;">+7 (952) 006-23-57</strong> или <strong style="color: #27ae60;">+7 (913) 244-77-07</strong>, или отправить письмо на <a href="mailto:vaincode@mail.ru" style="color: #27ae60;">vaincode@mail.ru</a>. Мы работаем ежедневно с 09:00 до 21:00.</p>
+                        <p style="color: #888;">Вы можете связаться с нами по телефону <strong style="color: #27ae60;">+7 (952) 006-23-57</strong> или <strong style="color: #27ae60;">+7 (913) 244-77-07</strong>, или отправить письмо на <a href="mailto:zetta_report@zetta22.ru" style="color: #27ae60;">zetta_report@zetta22.ru</a>. Мы работаем ежедневно с 09:00 до 21:00.</p>
                     </div>
                 </div>
             </div>
@@ -5319,7 +5319,7 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
             <div class="footer-section">
                 <a href="tel:+79520062357">📞 +7 (952) 006-23-57</a>
                 <a href="tel:+79132447707">📞 +7 (913) 244-77-07</a>
-                <a href="mailto:vaincode@mail.ru">✉️ vaincode@mail.ru</a>
+                <a href="mailto:zetta_report@zetta22.ru">✉️ zetta_report@zetta22.ru</a>
                 <span>📍 г. Барнаул, ул. Юрина, 182/7</span>
             </div>
             <div class="footer-section">
@@ -7777,12 +7777,6 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
 </html>{% endraw %}
 '''
 
-
-@app.route('/')
-def index():
-    return render_template_string(HTML_TEMPLATE)
-
-
 if __name__ == '__main__':
     users = load_users()
     admin_email = 'admin@zetta.ru'
@@ -7812,6 +7806,5 @@ if __name__ == '__main__':
         print(f"Пароль: admin123")
         print("=" * 50)
 
-    app.run(host='0.0.0.0', port=5000)
     # Строку ниже УДАЛИТЬ или ЗАКОММЕНТИРОВАТЬ
     # app.run(debug=True, port=5000)
