@@ -7809,6 +7809,7 @@ if __name__ == '__main__':
         print(f"Email: {admin_email}")
         print(f"Пароль: admin123")
         print("=" * 50)
+        app.run(debug=0.0.0.0, port=5000)
 
     # Запускаем только при локальном запуске, а не на сервере
     import os
