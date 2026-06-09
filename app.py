@@ -9443,7 +9443,6 @@ if __name__ == '__main__':
     print(f"📱 Открыть на телефоне: http://<IP-адрес>:{port}")
     print("=" * 60)
 
-    port = int(os.environ.get('PORT', 5000))
+    port = int(os.environ.get('PORT', 8080))
     host = '0.0.0.0'
-    print(f"Запуск сервера на {host}:{port}")
     app.run(host=host, port=port, debug=False)
