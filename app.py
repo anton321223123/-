@@ -8147,7 +8147,7 @@ if __name__ == '__main__':
         print("=" * 50)
         print("АДМИН ZETTA СОЗДАН:")
         print(f"Email: {admin_email}")
-        print(f"Пароль: admin123")
+        print(f"Пароль: admin123123")
         print("=" * 50)
 
     port = int(os.environ.get('PORT', 5000))
