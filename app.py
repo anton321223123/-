@@ -8133,25 +8133,25 @@ if __name__ == '__main__':
             break
 
    if not admin_exists:
-    # ПРИНУДИТЕЛЬНОЕ СОЗДАНИЕ АДМИНА
-    users = load_users()
-    admin_email = 'admin@zetta.ru'
+   # ПРИНУДИТЕЛЬНОЕ СОЗДАНИЕ АДМИНА
+users = load_users()
+admin_email = 'admin@zetta.ru'
 
-    # Создаем или обновляем админа
-    users[admin_email] = {
-        'email': admin_email,
-        'password': hash_password('admin123'),
-        'full_name': 'Администратор Zetta',
-        'phone': '+7 (999) 999-99-99',
-        'registered_at': datetime.now().strftime('%d.%m.%Y %H:%M:%S'),
-        'addresses': [],
-        'profile_complete': True,
-        'is_admin': True
-    }
-    save_users(users)
+# Создаем или обновляем админа
+users[admin_email] = {
+    'email': admin_email,
+    'password': hash_password('admin123'),
+    'full_name': 'Администратор Zetta',
+    'phone': '+7 (999) 999-99-99',
+    'registered_at': datetime.now().strftime('%d.%m.%Y %H:%M:%S'),
+    'addresses': [],
+    'profile_complete': True,
+    'is_admin': True
+}
+save_users(users)
 
-    print("=" * 50)
-    print("АДМИН ZETTA:")
-    print(f"Email: {admin_email}")
-    print(f"Пароль: admin123")
-    print("=" * 50)
+print("=" * 50)
+print("АДМИН ZETTA:")
+print(f"Email: {admin_email}")
+print(f"Пароль: admin123")
+print("=" * 50)
