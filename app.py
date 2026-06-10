@@ -6,7 +6,7 @@ from email.mime.multipart import MIMEMultipart
 from datetime import datetime, timedelta
 import random
 import os
-import hashlib
+# import hashlib  # закомментировано, т.к. хеширование отключено
 import re
 from werkzeug.utils import secure_filename
 
@@ -288,8 +288,8 @@ def save_promocodes_list(promocodes):
         json.dump(promocodes, f, ensure_ascii=False, indent=2)
 
 
-def hash_password(password):
-    return hashlib.sha256(password.encode()).hexdigest()
+#def hash_password(password):
+    #return hashlib.sha256(password.encode()).hexdigest()
 
 
 def generate_verification_code():
@@ -639,7 +639,7 @@ def login_user(email, password):
     if is_banned:
         return False, f"Ваш аккаунт забанен до {ban_until}. Причина: {ban_reason}. Сообщение от администратора: {ban_message}"
 
-    if email_lower in users and users[email_lower]['password'] == hash_password(password):
+    if email_lower in users and users[email_lower]['password'] == password:
         session['user_email'] = email_lower
         session['user_name'] = users[email_lower]['full_name']
         session['is_admin'] = users[email_lower].get('is_admin', False)
@@ -2397,7 +2397,7 @@ def register_user(email, password, full_name, phone):
 
     users[email_lower] = {
         'email': email_lower,
-        'password': hash_password(password),
+        'password': password,
         'full_name': full_name,
         'phone': phone,
         'registered_at': datetime.now().strftime('%d.%m.%Y %H:%M:%S'),
@@ -7105,7 +7105,7 @@ if __name__ == '__main__':
 
     users[admin_email] = {
         'email': admin_email,
-        'password': hash_password('admin123'),
+        'password': 'admin123',
         'full_name': 'Администратор Zetta',
         'phone': '+7 (999) 999-99-99',
         'registered_at': datetime.now().strftime('%d.%m.%Y %H:%M:%S'),
