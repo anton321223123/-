@@ -590,7 +590,7 @@ def register_user(email, password, full_name, phone):
 
     users[email_lower] = {
         'email': email_lower,
-        'password': hash_password(password),
+        'password': password,  # <-- УБРАЛ hash_password()
         'full_name': full_name,
         'phone': phone,
         'registered_at': datetime.now().strftime('%d.%m.%Y %H:%M:%S'),
@@ -600,7 +600,6 @@ def register_user(email, password, full_name, phone):
     }
     save_users(users)
     return True, "Регистрация успешна"
-
 
 def update_user_profile(email, full_name, phone):
     users = load_users()
@@ -635,7 +634,7 @@ def login_user(email, password):
     users = load_users()
     email_lower = email.lower()
     
-    # Должно быть ТАК (без hash_password)
+    # Тут НЕ ДОЛЖНО БЫТЬ hash_password()
     if email_lower in users and users[email_lower]['password'] == password:
         session['user_email'] = email_lower
         session['user_name'] = users[email_lower]['full_name']
@@ -7099,10 +7098,11 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
 if __name__ == '__main__':
     users = load_users()
     admin_email = 'admin@zetta.ru'
-
+    
+    # Создаём админа с обычным паролем (без хеширования)
     users[admin_email] = {
         'email': admin_email,
-        'password': 'admin123',
+        'password': 'admin123',  # <-- ПРОСТО ПАРОЛЬ, БЕЗ ХЕШИРОВАНИЯ
         'full_name': 'Администратор Zetta',
         'phone': '+7 (999) 999-99-99',
         'registered_at': datetime.now().strftime('%d.%m.%Y %H:%M:%S'),
@@ -7111,13 +7111,13 @@ if __name__ == '__main__':
         'is_admin': True
     }
     save_users(users)
-
+    
     print("=" * 50)
-    print("✅ АДМИН УСПЕШНО СОЗДАН/ОБНОВЛЁН!")
+    print("✅ АДМИН СОЗДАН!")
     print(f"   Email: {admin_email}")
     print(f"   Пароль: admin123")
     print("=" * 50)
-
+    
     port = int(os.environ.get('PORT', 5000))
     host = '0.0.0.0'
     print(f"Запуск сервера на {host}:{port}")
