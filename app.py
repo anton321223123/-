@@ -290,7 +290,8 @@ def save_promocodes_list(promocodes):
 
 
 def hash_password(password):
-    return hashlib.sha256(password.encode()).hexdigest()
+    """Временно отключаем хеширование - возвращаем пароль как есть"""
+    return password  # Просто возвращаем пароль без изменений
 
 
 def generate_verification_code():
@@ -596,7 +597,7 @@ def register_user(email, password, full_name, phone):
 
     users[email_lower] = {
         'email': email_lower,
-        'password': hash_password(password),
+        'password': password,  # ← Пароль в открытом виде!
         'full_name': full_name,
         'phone': phone,
         'registered_at': datetime.now().strftime('%d.%m.%Y %H:%M:%S'),
@@ -645,7 +646,8 @@ def login_user(email, password):
     if is_banned:
         return False, f"Ваш аккаунт забанен до {ban_until}. Причина: {ban_reason}. Сообщение от администратора: {ban_message}"
 
-    if email_lower in users and users[email_lower]['password'] == hash_password(password):
+    # Сравниваем пароли как есть (без хеширования)
+    if email_lower in users and users[email_lower]['password'] == password:
         session['user_email'] = email_lower
         session['user_name'] = users[email_lower]['full_name']
         session['is_admin'] = users[email_lower].get('is_admin', False)
@@ -1316,7 +1318,7 @@ def reset_password():
 
     users = load_users()
     if email_lower in users:
-        users[email_lower]['password'] = hash_password(new_password)
+        users[email_lower]['password'] = new_password  # ← Сохраняем как есть
         save_users(users)
         delete_password_reset(email_lower)
         return jsonify({'success': True, 'message': 'Пароль успешно изменён'})
@@ -1374,7 +1376,13 @@ def verify_code():
     if temp_data['code'] != code:
         return jsonify({'success': False, 'message': 'Неверный код подтверждения'})
 
-    success, message = register_user(email_lower, temp_data['password'], temp_data['full_name'], temp_data['phone'])
+    # Регистрация без хеширования
+    success, message = register_user(
+        email_lower, 
+        temp_data['password'],  # ← Пароль как есть
+        temp_data['full_name'], 
+        temp_data['phone']
+    )
 
     if success:
         delete_temp_registration(email_lower)
@@ -7784,20 +7792,17 @@ def index():
 
 
 if __name__ == '__main__':
+  # ========== НАСТРОЙКА АДМИНА (БЕЗ ХЕША) ==========
+def setup_admin_no_hash():
+    """Создает админа с паролем в открытом виде"""
     users = load_users()
     admin_email = 'admin@zetta.ru'
-    admin_exists = False
-
-    for email, user_data in users.items():
-        if user_data.get('is_admin', False):
-            admin_exists = True
-            print(f"Админ уже существует: {email}")
-            break
-
-    if not admin_exists:
+    admin_password = 'admin123'
+    
+    if admin_email not in users:
         users[admin_email] = {
             'email': admin_email,
-            'password': hash_password('admin123'),
+            'password': admin_password,  # ← Открытый пароль
             'full_name': 'Администратор Zetta',
             'phone': '+7 (999) 999-99-99',
             'registered_at': datetime.now().strftime('%d.%m.%Y %H:%M:%S'),
@@ -7807,12 +7812,16 @@ if __name__ == '__main__':
         }
         save_users(users)
         print("=" * 50)
-        print("АДМИН ZETTA СОЗДАН:")
+        print("✅ АДМИН СОЗДАН (без хеша)")
         print(f"Email: {admin_email}")
-        print(f"Пароль: admin123")
+        print(f"Пароль: {admin_password}")
         print("=" * 50)
+    else:
+        # Обновляем существующего админа
+        users[admin_email]['password'] = admin_password
+        users[admin_email]['is_admin'] = True
+        save_users(users)
+        print("✅ Права админа обновлены, пароль: admin123")
 
-    port = int(os.environ.get('PORT', 5000))
-    host = '0.0.0.0'
-    print(f"Запуск сервера на {host}:{port}")
-    app.run(host=host, port=port, debug=False)
+# Вызываем при запуске
+setup_admin_no_hash()
