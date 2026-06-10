@@ -8000,34 +8000,29 @@ def health_check():
     return 'OK', 200
 
 if __name__ == '__main__':
+    # ПРИНУДИТЕЛЬНОЕ СОЗДАНИЕ АДМИНА
     users = load_users()
     admin_email = 'admin@zetta.ru'
-    admin_exists = False
-
-    for email, user_data in users.items():
-        if user_data.get('is_admin', False):
-            admin_exists = True
-            print(f"Админ уже существует: {email}")
-            break
-
-    if not admin_exists:
-        users[admin_email] = {
-            'email': admin_email,
-            'password': hash_password('admin123'),
-            'full_name': 'Администратор Zetta',
-            'phone': '+7 (999) 999-99-99',
-            'registered_at': datetime.now().strftime('%d.%m.%Y %H:%M:%S'),
-            'addresses': [],
-            'profile_complete': True,
-            'is_admin': True
-        }
-        save_users(users)
-        print("=" * 50)
-        print("АДМИН ZETTA СОЗДАН:")
-        print(f"Email: {admin_email}")
-        print(f"Пароль: admin123")
-        print("=" * 50)
-
+    
+    # Всегда перезаписываем/создаём админа
+    users[admin_email] = {
+        'email': admin_email,
+        'password': hash_password('admin123'),
+        'full_name': 'Администратор Zetta',
+        'phone': '+7 (999) 999-99-99',
+        'registered_at': datetime.now().strftime('%d.%m.%Y %H:%M:%S'),
+        'addresses': [],
+        'profile_complete': True,
+        'is_admin': True
+    }
+    save_users(users)
+    
+    print("=" * 50)
+    print("✅ АДМИН УСПЕШНО СОЗДАН/ОБНОВЛЁН!")
+    print(f"   Email: {admin_email}")
+    print(f"   Пароль: admin123")
+    print("=" * 50)
+    
     port = int(os.environ.get('PORT', 5000))
     host = '0.0.0.0'
     print(f"Запуск сервера на {host}:{port}")
