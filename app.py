@@ -634,11 +634,8 @@ def is_admin(email):
 def login_user(email, password):
     users = load_users()
     email_lower = email.lower()
-
-    is_banned, ban_until, ban_reason, ban_message = is_user_banned(email_lower)
-    if is_banned:
-        return False, f"Ваш аккаунт забанен до {ban_until}. Причина: {ban_reason}. Сообщение от администратора: {ban_message}"
-
+    
+    # Должно быть ТАК (без hash_password)
     if email_lower in users and users[email_lower]['password'] == password:
         session['user_email'] = email_lower
         session['user_name'] = users[email_lower]['full_name']
