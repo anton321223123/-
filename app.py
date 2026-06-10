@@ -20,10 +20,6 @@ def health():
     """Простой health check для хостинга"""
     return 'OK', 200
 
-@app.route('/')
-def index_simple():
-    """Временный простой маршрут для проверки"""
-    return 'Zetta server is running!', 200
 app.config['UPLOAD_FOLDER'] = 'static/uploads'
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 
