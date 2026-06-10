@@ -8135,7 +8135,7 @@ if __name__ == '__main__':
     if not admin_exists:
         users[admin_email] = {
             'email': admin_email,
-            'password': hash_password('admin123'),
+            'password': hash_password('admin123123'),
             'full_name': 'Администратор Zetta',
             'phone': '+7 (999) 999-99-99',
             'registered_at': datetime.now().strftime('%d.%m.%Y %H:%M:%S'),
