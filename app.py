@@ -6,8 +6,6 @@ from email.mime.multipart import MIMEMultipart
 from datetime import datetime, timedelta
 import random
 import os
-import hashlib
-import shutil
 from werkzeug.utils import secure_filename
 from functools import wraps
 
@@ -289,10 +287,6 @@ def save_promocodes_list(promocodes):
         json.dump(promocodes, f, ensure_ascii=False, indent=2)
 
 
-def hash_password(password):
-    return hashlib.sha256(password.encode()).hexdigest()
-
-
 def generate_verification_code():
     return str(random.randint(100000, 999999))
 
@@ -435,7 +429,6 @@ def send_receipt_email(order_data):
         payment_method_text = "Банковская карта (онлайн)" if order_data[
                                                                  'payment_method'] == 'card' else "Наличными при получении"
 
-        # Исправленная строка - разбиваем на части чтобы избежать проблем с кавычками
         items_html = ''
         for item in order_data['items']:
             discount_style = 'color:#e74c3c; font-weight:bold;' if item.get('sale_price') and item['price'] != item.get(
@@ -446,8 +439,8 @@ def send_receipt_email(order_data):
             <tr>
                 <td style="{discount_style}">{item["name"]} {discount_span}</td>
                 <td>{item["quantity"]}</td>
-                <td>{item["price"]:,} ₽</td>
-                <td>{item["total"]:,} ₽</td>
+                <td>{item["price"]:,} ₽</td
+                <td>{item["total"]:,} ₽</td
             </tr>
             '''
 
@@ -596,7 +589,7 @@ def register_user(email, password, full_name, phone):
 
     users[email_lower] = {
         'email': email_lower,
-        'password': hash_password(password),
+        'password': password,  # Без хеширования
         'full_name': full_name,
         'phone': phone,
         'registered_at': datetime.now().strftime('%d.%m.%Y %H:%M:%S'),
@@ -645,7 +638,7 @@ def login_user(email, password):
     if is_banned:
         return False, f"Ваш аккаунт забанен до {ban_until}. Причина: {ban_reason}. Сообщение от администратора: {ban_message}"
 
-    if email_lower in users and users[email_lower]['password'] == hash_password(password):
+    if email_lower in users and users[email_lower]['password'] == password:
         session['user_email'] = email_lower
         session['user_name'] = users[email_lower]['full_name']
         session['is_admin'] = users[email_lower].get('is_admin', False)
@@ -1316,7 +1309,7 @@ def reset_password():
 
     users = load_users()
     if email_lower in users:
-        users[email_lower]['password'] = hash_password(new_password)
+        users[email_lower]['password'] = new_password
         save_users(users)
         delete_password_reset(email_lower)
         return jsonify({'success': True, 'message': 'Пароль успешно изменён'})
@@ -2242,6 +2235,33 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
             100% { transform: scale(1); }
         }
 
+        @keyframes lightning {
+            0% {
+                text-shadow: 0 0 0px #27ae60, 0 0 0px #27ae60;
+                transform: scale(1);
+            }
+            20% {
+                text-shadow: 0 0 5px #27ae60, 0 0 15px #27ae60, 0 0 25px #ffc107;
+                transform: scale(1.1);
+            }
+            40% {
+                text-shadow: 0 0 2px #27ae60, 0 0 5px #27ae60;
+                transform: scale(1);
+            }
+            60% {
+                text-shadow: 0 0 10px #27ae60, 0 0 20px #ffc107, 0 0 30px #fff;
+                transform: scale(1.05);
+            }
+            80% {
+                text-shadow: 0 0 3px #27ae60, 0 0 8px #27ae60;
+                transform: scale(1);
+            }
+            100% {
+                text-shadow: 0 0 0px #27ae60, 0 0 0px #27ae60;
+                transform: scale(1);
+            }
+        }
+
         @keyframes shine {
             0% { background-position: -200% center; }
             100% { background-position: 200% center; }
@@ -2283,6 +2303,12 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
 
         .cart-icon-animate {
             animation: pulse 0.3s ease-in-out;
+        }
+
+        /* Анимация молнии */
+        .lightning-animation {
+            animation: lightning 0.8s ease-in-out infinite;
+            display: inline-block;
         }
 
         /* Анимации для появления элементов */
@@ -2393,6 +2419,12 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
+        }
+
+        /* Анимация молнии для иконки */
+        .lightning-bolt {
+            animation: lightning 0.8s ease-in-out infinite;
+            display: inline-block;
         }
 
         .nav-links {
@@ -4857,7 +4889,7 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
     <div class="header">
         <div class="header-content">
             <div class="logo" onclick="goToHome()">
-                <span class="logo-icon">⚡</span>
+                <span class="logo-icon lightning-bolt">⚡</span>
                 <span class="logo-text">ZETTA</span>
             </div>
             <div class="nav-links">
@@ -7797,7 +7829,7 @@ if __name__ == '__main__':
     if not admin_exists:
         users[admin_email] = {
             'email': admin_email,
-            'password': hash_password('admin123'),
+            'password': 'admin123',  # Пароль в открытом виде
             'full_name': 'Администратор Zetta',
             'phone': '+7 (999) 999-99-99',
             'registered_at': datetime.now().strftime('%d.%m.%Y %H:%M:%S'),
