@@ -374,7 +374,6 @@ def send_verification_email(email, code, type='registration'):
 
         msg.attach(MIMEText(html_content, 'html', 'utf-8'))
 
-        # Используем SSL порт 465
         server = smtplib.SMTP_SSL(EMAIL_CONFIG['smtp_server'], EMAIL_CONFIG['smtp_port'])
         server.login(EMAIL_CONFIG['email'], EMAIL_CONFIG['password'])
         server.send_message(msg)
@@ -501,7 +500,8 @@ def send_receipt_email(order_data):
 
                     <div class="total">
                         <table style="width:100%; max-width:300px; margin-left:auto;">
-                            <tr><td><strong>Подытог:</strong></td><td align="right">{order_data['subtotal']:,} ₽</td                            {f'<tr><td><strong>Скидка:</strong></td><td align="right" style="color:#27ae60;">-{order_data["discount"]:,} ₽</td></tr>' if order_data['discount'] > 0 else ''}
+                            <tr><td><strong>Подытог:</strong></td><td align="right">{order_data['subtotal']:,} ₽</td></tr>
+                            {f'<tr><td><strong>Скидка:</strong></td><td align="right" style="color:#27ae60;">-{order_data["discount"]:,} ₽</td></tr>' if order_data['discount'] > 0 else ''}
                             <tr style="border-top:2px solid #ddd;"><td><strong>ИТОГО:</strong></td><td align="right"><strong>{order_data['total']:,} ₽</strong></td></tr>
                         </table>
                     </div>
@@ -739,10 +739,17 @@ OFFICE_COORDINATES = {
 }
 
 
-# ============ ДОБАВЬТЕ ЭТОТ КОД СЮДА ============
+# ==================== МАРШРУТЫ ====================
+
 @app.route('/')
 def index():
     return render_template_string(HTML_TEMPLATE)
+
+
+@app.route('/health')
+def health_check():
+    return 'OK', 200
+
 
 # СТРАНИЦА "САЙТ НЕДОСТУПЕН" (503 ошибка)
 @app.errorhandler(503)
@@ -7995,40 +8002,32 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
 </body>
 </html>{% endraw %}'''
 
-@app.route('/health')
-def health_check():
-    return 'OK', 200
-
 if __name__ == '__main__':
+    # ПРИНУДИТЕЛЬНОЕ СОЗДАНИЕ АДМИНА
     users = load_users()
     admin_email = 'admin@zetta.ru'
-    admin_exists = False
 
-    for email, user_data in users.items():
-        if user_data.get('is_admin', False):
-            admin_exists = True
-            print(f"Админ уже существует: {email}")
-            break
+    # Всегда перезаписываем/создаём админа
+    users[admin_email] = {
+        'email': admin_email,
+        'password': hash_password('admin123'),
+        'full_name': 'Администратор Zetta',
+        'phone': '+7 (999) 999-99-99',
+        'registered_at': datetime.now().strftime('%d.%m.%Y %H:%M:%S'),
+        'addresses': [],
+        'profile_complete': True,
+        'is_admin': True
+    }
+    save_users(users)
 
-    if not admin_exists:
-        users[admin_email] = {
-            'email': admin_email,
-            'password': hash_password('admin123'),
-            'full_name': 'Администратор Zetta',
-            'phone': '+7 (999) 999-99-99',
-            'registered_at': datetime.now().strftime('%d.%m.%Y %H:%M:%S'),
-            'addresses': [],
-            'profile_complete': True,
-            'is_admin': True
-        }
-        save_users(users)
-        print("=" * 50)
-        print("АДМИН ZETTA СОЗДАН:")
-        print(f"Email: {admin_email}")
-        print(f"Пароль: admin123")
-        print("=" * 50)
+    print("=" * 50)
+    print("✅ АДМИН УСПЕШНО СОЗДАН/ОБНОВЛЁН!")
+    print(f"   Email: {admin_email}")
+    print(f"   Пароль: admin123")
+    print("=" * 50)
 
-    port = int(os.environ.get('PORT', 5000))
+    # ВАЖНО: для хостинга используйте порт 8080
+    port = int(os.environ.get('PORT', 8080))
     host = '0.0.0.0'
     print(f"Запуск сервера на {host}:{port}")
     app.run(host=host, port=port, debug=False)
