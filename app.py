@@ -374,8 +374,8 @@ def send_verification_email(email, code, type='registration'):
 
         msg.attach(MIMEText(html_content, 'html', 'utf-8'))
 
-        server = smtplib.SMTP(EMAIL_CONFIG['smtp_server'], EMAIL_CONFIG['smtp_port'])
-        server.starttls()
+        # Используем SSL порт 465
+        server = smtplib.SMTP_SSL(EMAIL_CONFIG['smtp_server'], EMAIL_CONFIG['smtp_port'])
         server.login(EMAIL_CONFIG['email'], EMAIL_CONFIG['password'])
         server.send_message(msg)
         server.quit()
@@ -413,8 +413,7 @@ def send_operator_request_email(user_name, user_phone, user_email):
 
         msg.attach(MIMEText(html_content, 'html', 'utf-8'))
 
-        server = smtplib.SMTP(EMAIL_CONFIG['smtp_server'], EMAIL_CONFIG['smtp_port'])
-        server.starttls()
+        server = smtplib.SMTP_SSL(EMAIL_CONFIG['smtp_server'], EMAIL_CONFIG['smtp_port'])
         server.login(EMAIL_CONFIG['email'], EMAIL_CONFIG['password'])
         server.send_message(msg)
         server.quit()
@@ -435,7 +434,6 @@ def send_receipt_email(order_data):
         payment_method_text = "Банковская карта (онлайн)" if order_data[
                                                                  'payment_method'] == 'card' else "Наличными при получении"
 
-        # Исправленная строка - разбиваем на части чтобы избежать проблем с кавычками
         items_html = ''
         for item in order_data['items']:
             discount_style = 'color:#e74c3c; font-weight:bold;' if item.get('sale_price') and item['price'] != item.get(
@@ -503,8 +501,7 @@ def send_receipt_email(order_data):
 
                     <div class="total">
                         <table style="width:100%; max-width:300px; margin-left:auto;">
-                            <tr><td><strong>Подытог:</strong></td><td align="right">{order_data['subtotal']:,} ₽</td></tr>
-                            {f'<tr><td><strong>Скидка:</strong></td><td align="right" style="color:#27ae60;">-{order_data["discount"]:,} ₽</td></tr>' if order_data['discount'] > 0 else ''}
+                            <tr><td><strong>Подытог:</strong></td><td align="right">{order_data['subtotal']:,} ₽</td                            {f'<tr><td><strong>Скидка:</strong></td><td align="right" style="color:#27ae60;">-{order_data["discount"]:,} ₽</td></tr>' if order_data['discount'] > 0 else ''}
                             <tr style="border-top:2px solid #ddd;"><td><strong>ИТОГО:</strong></td><td align="right"><strong>{order_data['total']:,} ₽</strong></td></tr>
                         </table>
                     </div>
@@ -531,8 +528,7 @@ def send_receipt_email(order_data):
 
         msg.attach(MIMEText(html_content, 'html', 'utf-8'))
 
-        server = smtplib.SMTP(EMAIL_CONFIG['smtp_server'], EMAIL_CONFIG['smtp_port'])
-        server.starttls()
+        server = smtplib.SMTP_SSL(EMAIL_CONFIG['smtp_server'], EMAIL_CONFIG['smtp_port'])
         server.login(EMAIL_CONFIG['email'], EMAIL_CONFIG['password'])
         server.send_message(msg)
         server.quit()
@@ -731,9 +727,9 @@ def get_product_price(product):
 
 EMAIL_CONFIG = {
     'smtp_server': 'smtp.mail.ru',
-    'smtp_port': 587,
-    'email': 'vaincode@mail.ru',
-    'password': '7lvM92oEvTGdieqUCwGM'
+    'smtp_port': 465,
+    'email': 'zetta_report@zetta22.ru',
+    'password': 'Wertyxa120208'
 }
 
 OFFICE_COORDINATES = {
@@ -743,6 +739,11 @@ OFFICE_COORDINATES = {
 }
 
 
+# ============ ДОБАВЬТЕ ЭТОТ КОД СЮДА ============
+@app.route('/')
+def index():
+    return render_template_string(HTML_TEMPLATE)
+
 # СТРАНИЦА "САЙТ НЕДОСТУПЕН" (503 ошибка)
 @app.errorhandler(503)
 def service_unavailable(e):
@@ -751,6 +752,7 @@ def service_unavailable(e):
     <html>
     <head>
         <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Сайт временно недоступен</title>
         <style>
             * {
@@ -765,10 +767,12 @@ def service_unavailable(e):
                 align-items: center;
                 min-height: 100vh;
                 font-family: 'Segoe UI', Arial, sans-serif;
+                padding: 20px;
             }
             .error-container {
                 text-align: center;
                 animation: fadeInUp 0.8s ease-out;
+                max-width: 500px;
             }
             @keyframes fadeInUp {
                 from {
@@ -784,11 +788,6 @@ def service_unavailable(e):
                 0% { transform: scale(1); }
                 50% { transform: scale(1.05); }
                 100% { transform: scale(1); }
-            }
-            @keyframes shake {
-                0%, 100% { transform: translateX(0); }
-                25% { transform: translateX(-5px); }
-                75% { transform: translateX(5px); }
             }
             .triangle {
                 width: 0;
@@ -810,9 +809,6 @@ def service_unavailable(e):
                 font-weight: bold;
                 color: white;
                 text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
-            }
-            .triangle:hover {
-                animation: shake 0.5s ease-in-out;
             }
             .error-text {
                 font-size: 2rem;
@@ -839,6 +835,12 @@ def service_unavailable(e):
             .logo span {
                 color: #27ae60;
                 font-weight: bold;
+            }
+            @media (max-width: 768px) {
+                .triangle { border-left-width: 60px; border-right-width: 60px; border-bottom-width: 105px; }
+                .triangle::before { font-size: 3.5rem; }
+                .error-text { font-size: 1.5rem; }
+                .error-message { font-size: 0.9rem; }
             }
         </style>
     </head>
@@ -871,6 +873,7 @@ def ban_page():
         <html>
         <head>
             <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <title>Аккаунт заблокирован</title>
             <style>
                 * {
@@ -885,14 +888,15 @@ def ban_page():
                     align-items: center;
                     min-height: 100vh;
                     font-family: 'Segoe UI', Arial, sans-serif;
+                    padding: 20px;
                 }
                 .ban-container {
                     background: #1a1a1a;
                     border: 1px solid #e74c3c;
                     border-radius: 16px;
-                    padding: 2.5rem;
+                    padding: 2rem;
                     max-width: 500px;
-                    margin: 20px;
+                    width: 100%;
                     text-align: center;
                     animation: fadeInUp 0.6s ease-out;
                     box-shadow: 0 10px 30px rgba(0,0,0,0.5);
@@ -918,7 +922,7 @@ def ban_page():
                     animation: pulse 1.5s ease-in-out infinite;
                 }
                 .ban-title {
-                    font-size: 1.8rem;
+                    font-size: 1.5rem;
                     font-weight: bold;
                     color: #e74c3c;
                     margin-bottom: 1rem;
@@ -926,12 +930,12 @@ def ban_page():
                 .ban-subtitle {
                     color: #888;
                     margin-bottom: 1.5rem;
-                    font-size: 0.9rem;
+                    font-size: 0.85rem;
                 }
                 .ban-info {
                     background: #0f0f0f;
                     border-radius: 12px;
-                    padding: 1.5rem;
+                    padding: 1.2rem;
                     text-align: left;
                     margin-bottom: 1.5rem;
                     border-left: 4px solid #e74c3c;
@@ -939,6 +943,7 @@ def ban_page():
                 .ban-info p {
                     margin: 0.5rem 0;
                     color: #bbb;
+                    font-size: 0.9rem;
                 }
                 .ban-info strong {
                     color: #27ae60;
@@ -950,6 +955,7 @@ def ban_page():
                     margin: 0.5rem 0;
                     color: #e74c3c;
                     font-weight: bold;
+                    font-size: 0.9rem;
                 }
                 .ban-message {
                     background: #1a2a1a;
@@ -958,6 +964,7 @@ def ban_page():
                     margin: 0.5rem 0;
                     color: #27ae60;
                     font-style: italic;
+                    font-size: 0.9rem;
                 }
                 .ban-date {
                     color: #f39c12;
@@ -969,10 +976,6 @@ def ban_page():
                     font-weight: bold;
                     transition: all 0.3s ease;
                 }
-                .contact-link:hover {
-                    text-decoration: underline;
-                    color: #229954;
-                }
                 .back-btn {
                     background: #27ae60;
                     color: white;
@@ -983,10 +986,17 @@ def ban_page():
                     font-size: 1rem;
                     margin-top: 1rem;
                     transition: all 0.3s ease;
+                    width: 100%;
+                    max-width: 200px;
                 }
                 .back-btn:hover {
                     background: #229954;
                     transform: scale(1.02);
+                }
+                @media (max-width: 480px) {
+                    .ban-container { padding: 1.5rem; }
+                    .ban-title { font-size: 1.3rem; }
+                    .ban-icon { font-size: 3rem; }
                 }
             </style>
         </head>
@@ -995,7 +1005,6 @@ def ban_page():
                 <div class="ban-icon">🚫</div>
                 <div class="ban-title">ДОСТУП ЗАБЛОКИРОВАН</div>
                 <div class="ban-subtitle">Ваш аккаунт был заблокирован администрацией</div>
-
                 <div class="ban-info">
                     <p><strong>📅 Дата блокировки:</strong> <span class="ban-date">До {{ ban_until }}</span></p>
                     <p><strong>⚠️ Причина блокировки:</strong></p>
@@ -1003,12 +1012,10 @@ def ban_page():
                     <p><strong>💬 Сообщение от администратора:</strong></p>
                     <div class="ban-message">{{ message }}</div>
                 </div>
-
-                <p style="color: #888; font-size: 0.85rem;">
+                <p style="color: #888; font-size: 0.8rem;">
                     Если вы считаете, что это ошибка, свяжитесь с нами по почте 
-                    <a href="mailto:vaincode@mail.ru" class="contact-link">vaincode@mail.ru</a>
+                    <a href="mailto:zetta_report@zetta22.ru" class="contact-link">zetta_report@zetta22.ru</a>
                 </p>
-
                 <button class="back-btn" onclick="window.location.href='/'">🔙 Вернуться на главную</button>
             </div>
         </body>
@@ -1022,10 +1029,8 @@ def ban_page():
 def check_ban():
     if request.endpoint == 'static':
         return None
-
     if request.endpoint == 'ban_page':
         return None
-
     if 'user_email' in session:
         is_banned, ban_until, ban_reason, ban_message = is_user_banned(session['user_email'])
         if is_banned:
@@ -1117,7 +1122,7 @@ def cooperation():
     if 'user_email' not in session:
         return jsonify({'success': False, 'message': 'Не авторизован'}), 401
 
-    response = "По вопросам рекламы и сотрудничества пишите нам на почту vaincode@mail.ru или можете позвонить по номеру телефона 89520062357."
+    response = "По вопросам рекламы и сотрудничества пишите нам на почту zetta_report@zetta22.ru или можете позвонить по номеру телефона 89520062357."
 
     return jsonify({
         'success': True,
@@ -1195,8 +1200,7 @@ def send_feedback():
 
         msg.attach(MIMEText(html_content, 'html', 'utf-8'))
 
-        server = smtplib.SMTP(EMAIL_CONFIG['smtp_server'], EMAIL_CONFIG['smtp_port'])
-        server.starttls()
+        server = smtplib.SMTP_SSL(EMAIL_CONFIG['smtp_server'], EMAIL_CONFIG['smtp_port'])
         server.login(EMAIL_CONFIG['email'], EMAIL_CONFIG['password'])
         server.send_message(msg)
         server.quit()
@@ -2167,12 +2171,13 @@ def unban_user_route():
 
 
 # ==================== ГЛАВНАЯ СТРАНИЦА ====================
+# Полный HTML шаблон с адаптивным дизайном для мобильных устройств
 
 HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes, viewport-fit=cover">
     <title>Zetta | Профессиональная сборка ПК и IT-услуги</title>
     <style>
         * {
@@ -2285,7 +2290,6 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
             animation: pulse 0.3s ease-in-out;
         }
 
-        /* Анимации для появления элементов */
         .fade-up {
             animation: fadeInUp 0.6s ease-out forwards;
         }
@@ -2324,24 +2328,341 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
             animation-delay: calc(var(--index, 0) * 0.05s);
         }
 
-        .team-card[data-role="director"]:hover {
-            animation: glowRed 1s ease-in-out infinite;
-            border-color: #e74c3c;
-            transform: scale(1.02);
+        /* Адаптивные стили - мобильные устройства */
+        @media (max-width: 768px) {
+            .container {
+                padding: 1rem;
+            }
+            .products-grid {
+                grid-template-columns: 1fr !important;
+                gap: 1rem !important;
+            }
+            .team-grid {
+                grid-template-columns: 1fr !important;
+                gap: 1rem !important;
+            }
+            .team-card.center {
+                transform: scale(1) !important;
+                order: -1;
+            }
+            .contacts-grid {
+                grid-template-columns: 1fr !important;
+                gap: 1rem !important;
+            }
+            .catalog-page-wrapper {
+                flex-direction: column !important;
+            }
+            .catalog-sidebar {
+                width: 100% !important;
+                position: static !important;
+                margin-bottom: 1rem;
+            }
+            .cart-panel {
+                width: 100% !important;
+                right: -100% !important;
+            }
+            .header-content {
+                flex-direction: column !important;
+                padding: 0.75rem 1rem !important;
+            }
+            .nav-links {
+                gap: 1rem !important;
+                flex-wrap: wrap;
+                justify-content: center;
+            }
+            .nav-link {
+                font-size: 0.8rem !important;
+            }
+            .hero h1 {
+                font-size: 1.8rem !important;
+            }
+            .hero p {
+                font-size: 0.9rem !important;
+            }
+            .hero {
+                padding: 2rem 1rem !important;
+            }
+            .search-bar-full {
+                padding: 0.5rem 1rem !important;
+            }
+            .search-input-full {
+                font-size: 0.9rem !important;
+                padding: 0.6rem 1rem !important;
+            }
+            .search-btn-full {
+                padding: 0.6rem 1rem !important;
+                font-size: 0.8rem !important;
+            }
+            .team-avatar {
+                width: 100px !important;
+                height: 100px !important;
+            }
+            .team-name {
+                font-size: 1rem !important;
+            }
+            .team-position {
+                font-size: 0.75rem !important;
+            }
+            .team-description {
+                font-size: 0.75rem !important;
+            }
+            .promo-card {
+                padding: 0.5rem !important;
+            }
+            .promo-code {
+                font-size: 0.8rem !important;
+            }
+            .promo-discount {
+                font-size: 0.7rem !important;
+            }
+            .vlog-text {
+                font-size: 0.85rem !important;
+                padding: 1rem !important;
+            }
+            .news-card-title {
+                font-size: 0.9rem !important;
+            }
+            .news-card-text {
+                font-size: 0.75rem !important;
+            }
+            .carousel-slide {
+                flex-direction: column !important;
+                gap: 1rem !important;
+            }
+            .home-review-card {
+                padding: 0.75rem !important;
+            }
+            .home-review-author {
+                font-size: 0.8rem !important;
+            }
+            .home-review-text {
+                font-size: 0.75rem !important;
+            }
+            .chat-window {
+                width: 90% !important;
+                right: 5% !important;
+                left: 5% !important;
+                bottom: 80px !important;
+                height: 70vh !important;
+                max-height: 500px;
+            }
+            .chat-button {
+                bottom: 15px !important;
+                right: 15px !important;
+                width: 50px !important;
+                height: 50px !important;
+                font-size: 20px !important;
+            }
+            .chat-message {
+                font-size: 0.8rem !important;
+                padding: 0.5rem 0.8rem !important;
+            }
+            .chat-question-btn {
+                padding: 0.6rem !important;
+                font-size: 0.8rem !important;
+            }
+            .footer-content {
+                flex-direction: column !important;
+                text-align: center;
+                gap: 1rem !important;
+            }
+            .footer-section {
+                flex-wrap: wrap !important;
+                justify-content: center;
+                gap: 0.8rem !important;
+            }
+            .footer-section a, .footer-section span {
+                font-size: 0.75rem !important;
+                white-space: normal !important;
+            }
+            .auth-container {
+                width: 95% !important;
+                margin: 10% auto !important;
+                padding: 1.5rem !important;
+            }
+            .auth-tab {
+                font-size: 0.9rem !important;
+                padding: 0.4rem 0.8rem !important;
+            }
+            .auth-input {
+                font-size: 0.9rem !important;
+                padding: 0.6rem !important;
+            }
+            .auth-btn {
+                font-size: 0.9rem !important;
+                padding: 0.6rem !important;
+            }
+            .product-title {
+                font-size: 0.85rem !important;
+            }
+            .product-price {
+                font-size: 0.9rem !important;
+            }
+            .add-to-cart {
+                font-size: 0.75rem !important;
+                padding: 0.4rem !important;
+            }
+            .write-review {
+                padding: 1rem !important;
+            }
+            .write-review h3 {
+                font-size: 1.1rem !important;
+            }
+            .star {
+                font-size: 1.8rem !important;
+            }
+            .review-name-input, .review-input {
+                font-size: 0.9rem !important;
+            }
+            .submit-review-btn {
+                font-size: 0.9rem !important;
+                padding: 0.7rem !important;
+            }
+            .profile-info {
+                padding: 1rem !important;
+            }
+            .profile-field {
+                margin-bottom: 0.75rem !important;
+            }
+            .profile-label {
+                font-size: 0.7rem !important;
+            }
+            .profile-value {
+                font-size: 0.9rem !important;
+            }
+            .order-card {
+                padding: 1rem !important;
+            }
+            .order-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 0.5rem;
+            }
+            .order-number {
+                font-size: 0.9rem !important;
+            }
+            .order-status {
+                font-size: 0.7rem !important;
+            }
+            .order-date {
+                font-size: 0.7rem !important;
+            }
+            .order-item {
+                font-size: 0.8rem !important;
+            }
+            .order-total {
+                font-size: 0.9rem !important;
+            }
+            .checkout-form {
+                padding: 1rem !important;
+            }
+            .form-label {
+                font-size: 0.8rem !important;
+            }
+            .form-input {
+                font-size: 0.9rem !important;
+                padding: 0.6rem !important;
+            }
+            .payment-option {
+                padding: 0.7rem !important;
+                font-size: 0.8rem !important;
+            }
+            .submit-btn {
+                font-size: 0.9rem !important;
+                padding: 0.7rem !important;
+            }
+            .admin-form {
+                padding: 1rem !important;
+            }
+            .admin-form h3 {
+                font-size: 1rem !important;
+            }
+            .admin-tab {
+                font-size: 0.8rem !important;
+                padding: 0.4rem 0.7rem !important;
+            }
+            .admin-product-card {
+                flex-direction: column;
+                text-align: center;
+            }
+            .admin-user-actions {
+                justify-content: center;
+            }
+            .modal-content {
+                width: 95% !important;
+                margin: 10% auto !important;
+            }
+            .verify-container, .reset-container, .profile-form-container, .feedback-container {
+                width: 95% !important;
+                margin: 15% auto !important;
+                padding: 1.5rem !important;
+            }
+            .verify-code-input {
+                font-size: 1.2rem !important;
+                padding: 0.8rem !important;
+            }
         }
 
-        .team-card[data-role="manager"]:hover {
-            animation: glowYellow 1s ease-in-out infinite;
-            border-color: #f1c40f;
-            transform: scale(1.02);
+        /* Дополнительные адаптивные стили для очень маленьких экранов */
+        @media (max-width: 480px) {
+            .hero h1 {
+                font-size: 1.5rem !important;
+            }
+            .nav-links {
+                gap: 0.7rem !important;
+            }
+            .nav-link {
+                font-size: 0.7rem !important;
+            }
+            .logo-text {
+                font-size: 1.2rem !important;
+            }
+            .logo-icon {
+                font-size: 1.5rem !important;
+            }
+            .team-avatar {
+                width: 80px !important;
+                height: 80px !important;
+            }
+            .team-card {
+                padding: 1rem !important;
+            }
+            .vlog-edit-btn {
+                font-size: 0.7rem !important;
+                padding: 0.3rem 0.7rem !important;
+            }
+            .cart-item {
+                flex-direction: column;
+                gap: 0.5rem;
+                text-align: center;
+            }
+            .cart-item-title {
+                font-size: 0.85rem !important;
+            }
+            .promo-input-group {
+                flex-direction: column;
+            }
+            .apply-promo-btn {
+                width: 100%;
+            }
+            .checkout-btn {
+                font-size: 0.8rem !important;
+            }
+            .contact-card {
+                padding: 1rem !important;
+            }
+            .contact-title {
+                font-size: 0.9rem !important;
+            }
+            .contact-value {
+                font-size: 0.8rem !important;
+            }
+            .map-placeholder {
+                padding: 1rem !important;
+            }
         }
 
-        .team-card[data-role="admin"]:hover {
-            animation: glowBlue 1s ease-in-out infinite;
-            border-color: #3498db;
-            transform: scale(1.02);
-        }
-
+        /* Остальные стили (основные) */
         .header {
             background: #0a0a0a;
             border-bottom: 1px solid #2a2a2a;
@@ -2439,7 +2760,6 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
             width: 100%;
         }
 
-        /* Поисковая строка на всю ширину */
         .search-bar-full {
             background: #0f0f0f;
             border-top: 1px solid #2a2a2a;
@@ -2543,7 +2863,6 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
             flex: 1;
         }
 
-        /* Боковая панель категорий - только для каталога */
         .catalog-page-wrapper {
             display: flex;
             gap: 2rem;
@@ -2616,6 +2935,7 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
             border: 1px solid #2a2a2a;
             padding: 1.5rem;
             margin-bottom: 2rem;
+            border-radius: 12px;
         }
 
         .admin-tabs {
@@ -3569,7 +3889,6 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
             line-height: 1.5;
         }
 
-        /* Стили для влога */
         .vlog-section {
             background: #0f0f0f;
             border: 1px solid #2a2a2a;
@@ -3611,7 +3930,6 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
             transform: scale(1.02);
         }
 
-        /* Модальное окно для предложений */
         .feedback-modal {
             display: none;
             position: fixed;
@@ -3775,36 +4093,6 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
             display: grid;
             grid-template-columns: repeat(3, 1fr);
             gap: 1.5rem;
-        }
-
-        @media (max-width: 1024px) {
-            .products-grid {
-                grid-template-columns: repeat(2, 1fr);
-            }
-        }
-
-        @media (max-width: 768px) {
-            .products-grid {
-                grid-template-columns: 1fr;
-            }
-            .catalog-page-wrapper {
-                flex-direction: column;
-            }
-            .catalog-sidebar {
-                width: 100%;
-                position: static;
-            }
-            .team-grid {
-                grid-template-columns: 1fr;
-                gap: 1rem;
-            }
-            .team-card.center {
-                transform: scale(1);
-                order: -1;
-            }
-            .contacts-grid {
-                grid-template-columns: 1fr;
-            }
         }
 
         .product-card {
@@ -4607,7 +4895,6 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
             color: #229954;
         }
 
-        /* Стили для чата-помощника с кнопками */
         .chat-button {
             position: fixed;
             bottom: 20px;
@@ -4755,7 +5042,6 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
             transform: translateY(-2px);
         }
 
-        /* ФУТЕР В ОДНУ СТРОКУ */
         .footer {
             background: #0a0a0a;
             border-top: 1px solid #2a2a2a;
@@ -4798,59 +5084,6 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
         .footer-bottom {
             display: none;
         }
-
-        @media (max-width: 768px) {
-            .footer-content {
-                flex-direction: column;
-                text-align: center;
-            }
-            .footer-section {
-                flex-wrap: wrap;
-                justify-content: center;
-            }
-            .footer-section a, .footer-section span {
-                white-space: normal;
-            }
-            .carousel-slide {
-                flex-direction: column;
-            }
-            .contacts-grid {
-                grid-template-columns: 1fr;
-            }
-            .cart-panel {
-                width: 100%;
-                right: -100%;
-            }
-            .header-content {
-                flex-direction: column;
-            }
-            .payment-methods {
-                flex-direction: column;
-            }
-            .home-reviews-grid {
-                grid-template-columns: 1fr;
-            }
-            .profile-container {
-                padding: 1rem;
-            }
-            .chat-window {
-                width: 90%;
-                right: 5%;
-                left: 5%;
-                bottom: 95px;
-                height: 450px;
-            }
-            .chat-button {
-                bottom: 15px;
-                right: 15px;
-                width: 50px;
-                height: 50px;
-                font-size: 20px;
-            }
-            .search-bar-full {
-                padding: 0.5rem 1rem;
-            }
-        }
     </style>
 </head>
 <body>
@@ -4877,7 +5110,6 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
                 <span class="cart-count" id="cartCount">0</span>
             </div>
         </div>
-        <!-- Поисковая строка на всю ширину, под навигацией, всегда пустая -->
         <div class="search-bar-full">
             <div class="search-container">
                 <input type="text" class="search-input-full" id="searchInput" placeholder="Поиск услуг..." value="">
@@ -4893,13 +5125,11 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
                 <p>Ваш надёжный партнёр в мире IT-технологий</p>
             </div>
 
-            <!-- 1. Активные промокоды -->
             <div class="promo-section">
                 <div class="promo-title">Активные промокоды</div>
                 <div class="promo-codes" id="promoCodes"></div>
             </div>
 
-            <!-- 2. НАША КОМАНДА -->
             <div class="team-section">
                 <div class="team-title">★ НАША КОМАНДА ★</div>
                 <div class="team-grid">
@@ -4924,16 +5154,14 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
                 </div>
             </div>
 
-            <!-- 3. НАШ БЛОГ / ВЛОГ -->
             <div class="vlog-section">
-                <div class="team-title">★ НАШ БЛОГ / ВЛОГ ★</div>
+                <div class="team-title">★ НАШ БЛОГ ★</div>
                 <div class="vlog-content">
                     <div class="vlog-text" id="vlogText">Загрузка...</div>
                     <button class="vlog-edit-btn" id="vlogEditBtn" style="display: none;" onclick="openVlogEditor()">✏️ Редактировать влог</button>
                 </div>
             </div>
 
-            <!-- 4. НОВОСТИ КОМПАНИИ -->
             <div class="news-carousel-section" id="newsCarouselSection">
                 <div class="team-title">★ НОВОСТИ КОМПАНИИ ★</div>
                 <button class="admin-add-btn" id="addNewsBtn" onclick="showAddNewsModal()" style="display: none;">+</button>
@@ -4945,7 +5173,6 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
                 <div class="carousel-dots" id="carouselDots"></div>
             </div>
 
-            <!-- 5. ОТЗЫВЫ НАШИХ КЛИЕНТОВ -->
             <div class="reviews-section" id="homeReviewsSection">
                 <div class="reviews-title">★ ОТЗЫВЫ НАШИХ КЛИЕНТОВ ★</div>
                 <div class="home-reviews-grid" id="homeReviewsGrid">
@@ -5038,7 +5265,7 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
                     <div class="contact-card">
                         <div class="contact-icon">✉️</div>
                         <div class="contact-title">EMAIL</div>
-                        <div class="contact-value">vaincode@mail.ru</div>
+                        <div class="contact-value">zetta_report@zetta22.ru</div>
                     </div>
                     <div class="contact-card">
                         <div class="contact-icon">🕐</div>
@@ -5050,7 +5277,7 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
                     <div class="contact-icon" style="font-size: 3rem;">🗺️</div>
                     <div class="contact-title">НАШЕ МЕСТОПОЛОЖЕНИЕ</div>
                     <div class="contact-value">г. Барнаул, ул. Юрина, 182/7 (вход с торца здания, 7 подъезд)</div>
-                    <div style="margin-top: 1rem; padding: 1rem; background: #1a1a1a; border-radius: 4px;">
+                    <div style="margin-top: 1rem; padding: 1rem; background: #1a1a1a; border-radius: 8px;">
                         <strong>ООО "Zetta"</strong><br>
                         ИНН: 2225557711 | ОГРН: 1222222003321
                     </div>
@@ -5069,7 +5296,7 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
                     <p style="margin-bottom: 1rem;"><strong>1. Сбор информации</strong><br>Мы собираем информацию, которую вы предоставляете добровольно при регистрации, оформлении заказа или обращении в службу поддержки: имя, email, номер телефона, адрес доставки.</p>
                     <p style="margin-bottom: 1rem;"><strong>2. Использование информации</strong><br>Ваши данные используются исключительно для обработки заказов, доставки товаров и информирования о статусе заказа. Мы не передаём ваши данные третьим лицам без вашего согласия.</p>
                     <p style="margin-bottom: 1rem;"><strong>3. Защита данных</strong><br>Мы принимаем все необходимые меры для защиты ваших персональных данных от несанкционированного доступа, изменения, раскрытия или уничтожения.</p>
-                    <p><strong>4. Контактная информация</strong><br>По всем вопросам, связанным с обработкой персональных данных, вы можете обратиться по email: <a href="mailto:vaincode@mail.ru" style="color: #27ae60;">vaincode@mail.ru</a></p>
+                    <p><strong>4. Контактная информация</strong><br>По всем вопросам, связанным с обработкой персональных данных, вы можете обратиться по email: <a href="mailto:zetta_report@zetta22.ru" style="color: #27ae60;">zetta_report@zetta22.ru</a></p>
                 </div>
 
                 <div class="admin-form" style="margin-bottom: 0;">
@@ -5097,7 +5324,7 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
 
                     <div style="margin-bottom: 1.5rem;">
                         <p style="color: #27ae60; margin-bottom: 0.5rem;"><strong>Как связаться со службой поддержки?</strong></p>
-                        <p style="color: #888;">Вы можете связаться с нами по телефону <strong style="color: #27ae60;">+7 (952) 006-23-57</strong> или <strong style="color: #27ae60;">+7 (913) 244-77-07</strong>, или отправить письмо на <a href="mailto:vaincode@mail.ru" style="color: #27ae60;">vaincode@mail.ru</a>. Мы работаем ежедневно с 09:00 до 21:00.</p>
+                        <p style="color: #888;">Вы можете связаться с нами по телефону <strong style="color: #27ae60;">+7 (952) 006-23-57</strong> или <strong style="color: #27ae60;">+7 (913) 244-77-07</strong>, или отправить письмо на <a href="mailto:zetta_report@zetta22.ru" style="color: #27ae60;">zetta_report@zetta22.ru</a>. Мы работаем ежедневно с 09:00 до 21:00.</p>
                     </div>
                 </div>
             </div>
@@ -5313,13 +5540,12 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
         </div>
     </div>
 
-    <!-- ФУТЕР В ОДНУ СТРОКУ -->
     <footer class="footer">
         <div class="footer-content">
             <div class="footer-section">
                 <a href="tel:+79520062357">📞 +7 (952) 006-23-57</a>
                 <a href="tel:+79132447707">📞 +7 (913) 244-77-07</a>
-                <a href="mailto:vaincode@mail.ru">✉️ vaincode@mail.ru</a>
+                <a href="mailto:zetta_report@zetta22.ru">✉️ zetta_report@zetta22.ru</a>
                 <span>📍 г. Барнаул, ул. Юрина, 182/7</span>
             </div>
             <div class="footer-section">
@@ -5334,10 +5560,8 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
         </div>
     </footer>
 
-    <!-- Кнопка чата -->
     <button class="chat-button" id="chatButton" onclick="toggleChat()">💬</button>
 
-    <!-- Окно чата-помощника -->
     <div class="chat-window" id="chatWindow">
         <div class="chat-header">
             <h3>Чат поддержки Zetta</h3>
@@ -5355,7 +5579,6 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
         </div>
     </div>
 
-    <!-- Модальное окно для отправки предложения/жалобы -->
     <div id="feedbackModal" class="feedback-modal">
         <div class="feedback-container">
             <h3>📝 Предложения и жалобы</h3>
@@ -5532,7 +5755,6 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
         let currentCategory = 'all';
         let currentSearchTerm = '';
 
-        // Функция анимации полёта товара в корзину
         function animateToCart(element) {
             const cartIcon = document.getElementById('cartIcon');
             const rect = element.getBoundingClientRect();
@@ -5556,7 +5778,6 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
             }, 600);
         }
 
-        // Функции чата-помощника
         function toggleChat() {
             const win = document.getElementById('chatWindow');
             win.classList.toggle('open');
@@ -5763,7 +5984,6 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
             messagesArea.scrollTop = messagesArea.scrollHeight;
         }
 
-        // Функции для влога
         function loadVlog() {
             fetch('/api/vlog')
                 .then(res => res.json())
@@ -5797,7 +6017,6 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
                 });
         }
 
-        // Функции для предложений/жалоб
         function openFeedbackModal() {
             document.getElementById('feedbackModal').style.display = 'block';
             document.getElementById('feedbackMessage').value = '';
@@ -5873,9 +6092,9 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
         function openNewsModal(index) {
             const item = newsData[index];
             if (!item) return;
-            document.getElementById('newsModalTitle').textContent = item.title;
+            document.getElementById('newsModalTitle').innerHTML = item.title;
             document.getElementById('newsModalImage').src = item.image;
-            document.getElementById('newsModalDate').textContent = item.date;
+            document.getElementById('newsModalDate').innerHTML = item.date;
             document.getElementById('newsModalFullText').innerHTML = `<p>${item.fullText}</p><p style="margin-top:1rem;">🔥 Не упустите возможность! Обращайтесь в Zetta!</p>`;
             document.getElementById('newsModal').style.display = 'block';
         }
@@ -5999,11 +6218,11 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
                     slideDiv.innerHTML += `
                         <div class="news-card" onclick="openNewsModal(${j})" style="position:relative;">
                             ${adminActions}
-                            <img src="${item.image}" class="news-card-image" alt="${item.title}" onerror="this.src='https://via.placeholder.com/300x200/2c3e50/ffffff?text=No+Image'">
+                            <img src="${item.image}" class="news-card-image" onerror="this.src='https://via.placeholder.com/300x200/2c3e50/ffffff?text=No+Image'">
                             <div class="news-card-content">
                                 <div class="news-card-date">${item.date}</div>
-                                <div class="news-card-title">${item.title}</div>
-                                <div class="news-card-text">${item.text}</div>
+                                <div class="news-card-title">${escapeHtml(item.title)}</div>
+                                <div class="news-card-text">${escapeHtml(item.text)}</div>
                             </div>
                         </div>
                     `;
@@ -6835,12 +7054,12 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
                         phone: phone,
                         password: password
                     };
-                    document.getElementById('verifyEmailDisplay').textContent = email;
+                    document.getElementById('verifyEmailDisplay').innerHTML = email;
                     document.getElementById('verifyModal').style.display = 'block';
                     document.getElementById('verifyCode').value = '';
 
                     startTimer(300, (seconds) => updateTimerDisplay(seconds), () => {
-                        document.getElementById('verifyTimer').textContent = 'Код истёк. Запросите новый.';
+                        document.getElementById('verifyTimer').innerHTML = 'Код истёк. Запросите новый.';
                     });
                 } else {
                     alert(data.message);
@@ -6888,7 +7107,7 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
                 if (data.success) {
                     alert('Новый код отправлен на почту');
                     startTimer(300, (seconds) => updateTimerDisplay(seconds), () => {
-                        document.getElementById('verifyTimer').textContent = 'Код истёк. Запросите новый.';
+                        document.getElementById('verifyTimer').innerHTML = 'Код истёк. Запросите новый.';
                     });
                 } else {
                     alert(data.message);
@@ -7006,7 +7225,7 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
 
                         const userNameSpan = document.getElementById('userNameDisplay');
                         if (userNameSpan) {
-                            userNameSpan.textContent = data.user.full_name ? data.user.full_name.split(' ')[0] : data.user.email;
+                            userNameSpan.innerHTML = data.user.full_name ? data.user.full_name.split(' ')[0] : data.user.email;
                         }
 
                         const profileLink = document.getElementById('profileLink');
@@ -7032,7 +7251,7 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
                         currentUser = null;
 
                         const userNameSpan = document.getElementById('userNameDisplay');
-                        if (userNameSpan) userNameSpan.textContent = 'Войти';
+                        if (userNameSpan) userNameSpan.innerHTML = 'Войти';
 
                         const profileLink = document.getElementById('profileLink');
                         if (profileLink) profileLink.style.display = 'none';
@@ -7161,10 +7380,10 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
             fetch('/api/user/profile')
                 .then(res => res.json())
                 .then(data => {
-                    document.getElementById('profileFullName').textContent = data.full_name;
-                    document.getElementById('profileEmail').textContent = data.email;
-                    document.getElementById('profilePhone').textContent = data.phone;
-                    document.getElementById('profileRegistered').textContent = data.registered_at;
+                    document.getElementById('profileFullName').innerHTML = data.full_name;
+                    document.getElementById('profileEmail').innerHTML = data.email;
+                    document.getElementById('profilePhone').innerHTML = data.phone;
+                    document.getElementById('profileRegistered').innerHTML = data.registered_at;
                 });
         }
 
@@ -7206,9 +7425,9 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
         }
 
         function editProfile() {
-            document.getElementById('profileFullNameInput').value = document.getElementById('profileFullName').textContent;
-            document.getElementById('profileEmailInput').value = document.getElementById('profileEmail').textContent;
-            document.getElementById('profilePhoneInput').value = document.getElementById('profilePhone').textContent;
+            document.getElementById('profileFullNameInput').value = document.getElementById('profileFullName').innerHTML;
+            document.getElementById('profileEmailInput').value = document.getElementById('profileEmail').innerHTML;
+            document.getElementById('profilePhoneInput').value = document.getElementById('profilePhone').innerHTML;
             document.getElementById('profileFormModal').style.display = 'block';
         }
 
@@ -7399,9 +7618,9 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
                     return;
                 }
                 currentCartData = data;
-                document.getElementById('checkoutSubtotal').textContent = data.subtotal.toLocaleString();
-                document.getElementById('checkoutDiscount').textContent = data.discount.toLocaleString();
-                document.getElementById('checkoutTotal').textContent = data.total.toLocaleString();
+                document.getElementById('checkoutSubtotal').innerHTML = data.subtotal.toLocaleString();
+                document.getElementById('checkoutDiscount').innerHTML = data.discount.toLocaleString();
+                document.getElementById('checkoutTotal').innerHTML = data.total.toLocaleString();
 
                 document.getElementById('orderSummaryItems').innerHTML = data.items.map(item => `
                     <div style="display: flex; justify-content: space-between; padding: 0.5rem 0;">
@@ -7527,7 +7746,7 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
                 const hasDiscount = p.sale_price && p.sale_price > 0 && p.sale_price < p.price;
                 const displayPrice = hasDiscount ? p.sale_price : p.price;
 
-                document.getElementById('modalTitle').textContent = p.name;
+                document.getElementById('modalTitle').innerHTML = p.name;
                 document.getElementById('modalImage').src = p.image;
                 document.getElementById('modalImage').onerror = function() { this.src = 'https://via.placeholder.com/300x200/2c3e50/ffffff?text=No+Image'; };
                 document.getElementById('modalPrice').innerHTML = hasDiscount ? 
@@ -7590,7 +7809,7 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
 
         function updateCartDisplay() {
             fetch('/api/cart').then(res => res.json()).then(data => {
-                document.getElementById('cartCount').textContent = data.items.reduce((s,i) => s + i.quantity, 0);
+                document.getElementById('cartCount').innerHTML = data.items.reduce((s,i) => s + i.quantity, 0);
                 const cartItemsDiv = document.getElementById('cartItems');
                 if (data.items.length === 0) {
                     cartItemsDiv.innerHTML = '<div class="empty-cart">Корзина пуста</div>';
@@ -7613,10 +7832,10 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
                         </div>
                     `).join('');
                 }
-                document.getElementById('cartSubtotal').textContent = data.subtotal.toLocaleString();
+                document.getElementById('cartSubtotal').innerHTML = data.subtotal.toLocaleString();
                 const discountEl = document.getElementById('cartDiscount');
-                if (discountEl) discountEl.textContent = `Скидка: ${data.discount.toLocaleString()} ₽`;
-                document.getElementById('cartTotal').textContent = data.total.toLocaleString();
+                if (discountEl) discountEl.innerHTML = `Скидка: ${data.discount.toLocaleString()} ₽`;
+                document.getElementById('cartTotal').innerHTML = data.total.toLocaleString();
             });
         }
 
@@ -7704,7 +7923,7 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
         function processOrder(method, data) {
             const btn = document.querySelector('.submit-btn');
             if (btn) {
-                btn.textContent = 'Обработка...';
+                btn.innerHTML = 'Обработка...';
                 btn.disabled = true;
             }
 
@@ -7736,7 +7955,7 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
                     if (cardFields) cardFields.classList.add('hidden');
                 }
                 if (btn) {
-                    btn.textContent = 'Оформить заказ';
+                    btn.innerHTML = 'Оформить заказ';
                     btn.disabled = false;
                 }
             });
@@ -7774,68 +7993,40 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
         goToHome();
     </script>
 </body>
-</html>{% endraw %}
-'''
+</html>{% endraw %}'''
 
-
-# ==================== КОНЕЦ HTML_TEMPLATE ====================
-
-@app.route('/force-admin')
-def force_admin():
-    """Принудительный вход в админку"""
-    users = load_users()
-    admin_email = 'admin@zetta.ru'
-    
-    users[admin_email] = {
-        'email': admin_email,
-        'password': hash_password('admin123'),
-        'full_name': 'Администратор Zetta',
-        'phone': '+7 (999) 999-99-99',
-        'registered_at': datetime.now().strftime('%d.%m.%Y %H:%M:%S'),
-        'addresses': [],
-        'profile_complete': True,
-        'is_admin': True
-    }
-    save_users(users)
-    
-    session['user_email'] = admin_email
-    session['user_name'] = 'Администратор Zetta'
-    session['is_admin'] = True
-    
-    return '<script>alert("✅ Вы вошли как администратор!"); window.location.href="/"</script>'
-
-@app.route('/check-users')
-def check_users():
-    users = load_users()
-    html = '<h2>Пользователи:</h2><ul>'
-    for email, data in users.items():
-        admin = ' 👑 АДМИН' if data.get('is_admin') else ''
-        html += f'<li>{email}{admin}</li>'
-    html += '</ul>'
-    return html
+@app.route('/health')
+def health_check():
+    return 'OK', 200
 
 if __name__ == '__main__':
     users = load_users()
     admin_email = 'admin@zetta.ru'
-    
-    # Принудительное создание админа
-    users[admin_email] = {
-        'email': admin_email,
-        'password': hash_password('admin123'),
-        'full_name': 'Администратор Zetta',
-        'phone': '+7 (999) 999-99-99',
-        'registered_at': datetime.now().strftime('%d.%m.%Y %H:%M:%S'),
-        'addresses': [],
-        'profile_complete': True,
-        'is_admin': True
-    }
-    save_users(users)
-    
-    print("=" * 50)
-    print("✅ АДМИН СОЗДАН:")
-    print(f"   Email: admin@zetta.ru")
-    print(f"   Пароль: admin123")
-    print("=" * 50)
+    admin_exists = False
+
+    for email, user_data in users.items():
+        if user_data.get('is_admin', False):
+            admin_exists = True
+            print(f"Админ уже существует: {email}")
+            break
+
+    if not admin_exists:
+        users[admin_email] = {
+            'email': admin_email,
+            'password': hash_password('admin123'),
+            'full_name': 'Администратор Zetta',
+            'phone': '+7 (999) 999-99-99',
+            'registered_at': datetime.now().strftime('%d.%m.%Y %H:%M:%S'),
+            'addresses': [],
+            'profile_complete': True,
+            'is_admin': True
+        }
+        save_users(users)
+        print("=" * 50)
+        print("АДМИН ZETTA СОЗДАН:")
+        print(f"Email: {admin_email}")
+        print(f"Пароль: admin123")
+        print("=" * 50)
 
     port = int(os.environ.get('PORT', 5000))
     host = '0.0.0.0'
