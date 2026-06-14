@@ -8,6 +8,7 @@ import random
 import os
 import hashlib
 import shutil
+import string
 from werkzeug.utils import secure_filename
 from functools import wraps
 
@@ -293,8 +294,14 @@ def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
 
 
+import string
+
 def generate_verification_code():
-    return str(random.randint(100000, 999999))
+    """Генерирует код из 6 символов: цифры и заглавные буквы"""
+    characters = string.digits + string.ascii_uppercase
+    # Исключаем похожие символы (0, O, 1, I)
+    characters = characters.replace('0', '').replace('O', '').replace('1', '').replace('I', '')
+    return ''.join(random.choices(characters, k=6))
 
 
 def is_promocode_used(email, promo_code):
@@ -344,7 +351,7 @@ def send_verification_email(email, code, type='registration'):
                 .container {{ max-width: 500px; margin: 0 auto; background: white; border-radius: 10px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }}
                 .header {{ background: #1a1a1a; color: white; padding: 20px; text-align: center; }}
                 .content {{ padding: 30px; text-align: center; }}
-                .code {{ font-size: 32px; font-weight: bold; color: #27ae60; letter-spacing: 5px; background: #f0f0f0; padding: 15px; border-radius: 8px; font-family: monospace; }}
+                .code {{ font-size: 28px; font-weight: bold; color: #27ae60; letter-spacing: 8px; background: #f0f0f0; padding: 15px; border-radius: 8px; font-family: monospace; }}
                 .footer {{ background: #f9f9f9; padding: 15px; text-align: center; font-size: 12px; color: #666; }}
                 .warning {{ color: #e74c3c; font-size: 12px; margin-top: 15px; }}
             </style>
@@ -374,17 +381,16 @@ def send_verification_email(email, code, type='registration'):
 
         msg.attach(MIMEText(html_content, 'html', 'utf-8'))
 
-        # Используем SSL порт 465
         server = smtplib.SMTP_SSL(EMAIL_CONFIG['smtp_server'], EMAIL_CONFIG['smtp_port'])
         server.login(EMAIL_CONFIG['email'], EMAIL_CONFIG['password'])
         server.send_message(msg)
         server.quit()
 
+        print(f"Письмо успешно отправлено на {email} с кодом: {code}")
         return True
     except Exception as e:
         print(f"Ошибка отправки email: {e}")
         return False
-
 
 def send_operator_request_email(user_name, user_phone, user_email):
     try:
@@ -729,7 +735,7 @@ EMAIL_CONFIG = {
     'smtp_server': 'smtp.mail.ru',
     'smtp_port': 465,
     'email': 'zetta_report@zetta22.ru',
-    'password': 'Wertyxa120208'
+    'password': 'Wertyxa120208'  # Убедитесь, что пароль правильный
 }
 
 OFFICE_COORDINATES = {
@@ -8046,7 +8052,27 @@ def force_login():
     session['is_admin'] = True
     
     return "<script>alert('Вы вошли как администратор!'); window.location.href='/'</script>"
-
+    
+@app.route('/test-email')
+def test_email():
+    test_code = generate_verification_code()
+    test_email = request.args.get('email', '')
+    
+    if not test_email:
+        return '''
+        <h2>Тест отправки email</h2>
+        <form method="get">
+            <input type="email" name="email" placeholder="Введите email для теста" required>
+            <button type="submit">Отправить тестовое письмо</button>
+        </form>
+        '''
+    
+    result = send_verification_email(test_email, test_code, 'registration')
+    if result:
+        return f'✅ Письмо отправлено на {test_email} с кодом: {test_code}'
+    else:
+        return f'❌ Ошибка отправки письма на {test_email}'
+        
 if __name__ == '__main__':
     users = load_users()
     admin_email = 'ael360@mail.ru'
