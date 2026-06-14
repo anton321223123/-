@@ -7998,6 +7998,55 @@ def index():
 def health_check():
     return 'OK', 200
 
+@app.route('/check-admin')
+def check_admin():
+    users = load_users()
+    admin_email = 'ael360@mail.ru'
+    
+    if admin_email in users:
+        user = users[admin_email]
+        is_admin = user.get('is_admin', False)
+        return f"""
+        <h2>Статус администратора</h2>
+        <p>Email: {admin_email}</p>
+        <p>is_admin: {is_admin}</p>
+        <p>Пользователь существует: Да</p>
+        <a href='/'>На главную</a>
+        """
+    else:
+        return f"""
+        <h2>Администратор НЕ найден!</h2>
+        <p>Email: {admin_email} не существует в базе</p>
+        <a href='/force-login'>Принудительный вход</a> | 
+        <a href='/'>На главную</a>
+        """
+
+@app.route('/force-login')
+def force_login():
+    users = load_users()
+    admin_email = 'ael360@mail.ru'
+    
+    # Создаём админа если его нет
+    if admin_email not in users:
+        users[admin_email] = {
+            'email': admin_email,
+            'password': hash_password('Wertyxa120208'),
+            'full_name': 'Администратор Zetta',
+            'phone': '+7 (999) 999-99-99',
+            'registered_at': datetime.now().strftime('%d.%m.%Y %H:%M:%S'),
+            'addresses': [],
+            'profile_complete': True,
+            'is_admin': True
+        }
+        save_users(users)
+    
+    # Принудительный вход
+    session['user_email'] = admin_email
+    session['user_name'] = 'Администратор Zetta'
+    session['is_admin'] = True
+    
+    return "<script>alert('Вы вошли как администратор!'); window.location.href='/'</script>"
+
 if __name__ == '__main__':
     users = load_users()
     admin_email = 'ael360@mail.ru'
