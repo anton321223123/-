@@ -7997,40 +7997,16 @@ def index():
 @app.route('/health')
 def health_check():
     return 'OK', 200
-    
- @app.route('/setup-admin')
-def setup_admin():
-    users = load_users()
-    admin_email = 'ael360@mail.ru'
-    
-    users[admin_email] = {
-        'email': admin_email,
-        'password': hash_password('Wertyxa120208'),
-        'full_name': 'Администратор Zetta',
-        'phone': '+7 (999) 999-99-99',
-        'registered_at': datetime.now().strftime('%d.%m.%Y %H:%M:%S'),
-        'addresses': [],
-        'profile_complete': True,
-        'is_admin': True
-    }
-    save_users(users)
-    return f"✅ Администратор создан!<br><br>📧 Email: ael360@mail.ru<br>🔑 Пароль: Wertyxa120208<br><br><a href='/'>🔙 Вернуться на главную</a>"
 
 if __name__ == '__main__':
     users = load_users()
-    admin_email = 'admin@zetta.ru'
-    admin_exists = False
-
-    for email, user_data in users.items():
-        if user_data.get('is_admin', False):
-            admin_exists = True
-            print(f"Админ уже существует: {email}")
-            break
-
-    if not admin_exists:
+    admin_email = 'ael360@mail.ru'
+    
+    # Автоматическое создание админа при запуске
+    if admin_email not in users:
         users[admin_email] = {
-            'email': admin_email,  # <-- уже в нижнем регистре
-            'password': hash_password('admin123'),
+            'email': admin_email,
+            'password': hash_password('Wertyxa120208'),
             'full_name': 'Администратор Zetta',
             'phone': '+7 (999) 999-99-99',
             'registered_at': datetime.now().strftime('%d.%m.%Y %H:%M:%S'),
@@ -8041,11 +8017,10 @@ if __name__ == '__main__':
         save_users(users)
         print("=" * 50)
         print("АДМИН ZETTA СОЗДАН:")
-        print(f"Email: admin@zetta.ru")
-        print(f"Пароль: admin123")
+        print(f"Email: ael360@mail.ru")
+        print(f"Пароль: Wertyxa120208")
         print("=" * 50)
-
-    port = int(os.environ.get('PORT', 5000))
-    host = '0.0.0.0'
-    print(f"Запуск сервера на {host}:{port}")
-    app.run(host=host, port=port, debug=False)
+    
+    # Запуск на порту 8080 для хостинга
+    port = int(os.environ.get('PORT', 8080))
+    app.run(host='0.0.0.0', port=port, debug=False)
