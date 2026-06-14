@@ -8,7 +8,6 @@ import random
 import os
 import hashlib
 import shutil
-import string
 from werkzeug.utils import secure_filename
 from functools import wraps
 
@@ -294,13 +293,8 @@ def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
 
 
-import string
-
 def generate_verification_code():
-    import string
-    characters = string.digits + string.ascii_uppercase
-    characters = characters.replace('0', '').replace('O', '').replace('1', '').replace('I', '')
-    return ''.join(random.choices(characters, k=6))
+    return str(random.randint(100000, 999999))
 
 
 def is_promocode_used(email, promo_code):
@@ -350,7 +344,7 @@ def send_verification_email(email, code, type='registration'):
                 .container {{ max-width: 500px; margin: 0 auto; background: white; border-radius: 10px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }}
                 .header {{ background: #1a1a1a; color: white; padding: 20px; text-align: center; }}
                 .content {{ padding: 30px; text-align: center; }}
-                .code {{ font-size: 28px; font-weight: bold; color: #27ae60; letter-spacing: 8px; background: #f0f0f0; padding: 15px; border-radius: 8px; font-family: monospace; }}
+                .code {{ font-size: 32px; font-weight: bold; color: #27ae60; letter-spacing: 5px; background: #f0f0f0; padding: 15px; border-radius: 8px; font-family: monospace; }}
                 .footer {{ background: #f9f9f9; padding: 15px; text-align: center; font-size: 12px; color: #666; }}
                 .warning {{ color: #e74c3c; font-size: 12px; margin-top: 15px; }}
             </style>
@@ -380,16 +374,17 @@ def send_verification_email(email, code, type='registration'):
 
         msg.attach(MIMEText(html_content, 'html', 'utf-8'))
 
+        # Используем SSL порт 465
         server = smtplib.SMTP_SSL(EMAIL_CONFIG['smtp_server'], EMAIL_CONFIG['smtp_port'])
         server.login(EMAIL_CONFIG['email'], EMAIL_CONFIG['password'])
         server.send_message(msg)
         server.quit()
 
-        print(f"Письмо успешно отправлено на {email} с кодом: {code}")
         return True
     except Exception as e:
         print(f"Ошибка отправки email: {e}")
         return False
+
 
 def send_operator_request_email(user_name, user_phone, user_email):
     try:
@@ -603,7 +598,7 @@ def register_user(email, password, full_name, phone):
         'registered_at': datetime.now().strftime('%d.%m.%Y %H:%M:%S'),
         'addresses': [],
         'profile_complete': True,
-        'is_admin': email_lower == 'admin@zetta.ru'  # <-- ИСПРАВЛЕНО: email_lower вместо email
+        'is_admin': email_lower == 'admin@zetta.ru'
     }
     save_users(users)
     return True, "Регистрация успешна"
@@ -649,7 +644,7 @@ def login_user(email, password):
     if email_lower in users and users[email_lower]['password'] == hash_password(password):
         session['user_email'] = email_lower
         session['user_name'] = users[email_lower]['full_name']
-        session['is_admin'] = users[email_lower].get('is_admin', False)  # <-- ИСПРАВЛЕНО: берем is_admin из данных пользователя
+        session['is_admin'] = users[email_lower].get('is_admin', False)
         return True, "Вход выполнен"
     return False, "Неверный email или пароль"
 
@@ -734,7 +729,7 @@ EMAIL_CONFIG = {
     'smtp_server': 'smtp.mail.ru',
     'smtp_port': 465,
     'email': 'zetta_report@zetta22.ru',
-    'password': 'Wertyxa120208'  # Убедитесь, что пароль правильный
+    'password': 'Wertyxa120208'
 }
 
 OFFICE_COORDINATES = {
@@ -7995,115 +7990,25 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
 </body>
 </html>{% endraw %}'''
 
-@app.route('/')
-def index():
-    return render_template_string(HTML_TEMPLATE)
-
 @app.route('/health')
 def health_check():
     return 'OK', 200
 
-@app.route('/check-admin')
-def check_admin():
-    users = load_users()
-    admin_email = 'ael360@mail.ru'
-    
-    if admin_email in users:
-        user = users[admin_email]
-        is_admin = user.get('is_admin', False)
-        return f"""
-        <h2>Статус администратора</h2>
-        <p>Email: {admin_email}</p>
-        <p>is_admin: {is_admin}</p>
-        <p>Пользователь существует: Да</p>
-        <a href='/'>На главную</a>
-        """
-    else:
-        return f"""
-        <h2>Администратор НЕ найден!</h2>
-        <p>Email: {admin_email} не существует в базе</p>
-        <a href='/force-login'>Принудительный вход</a> | 
-        <a href='/'>На главную</a>
-        """
-
-@app.route('/force-login')
-def force_login():
-    users = load_users()
-    admin_email = 'ael360@mail.ru'
-    
-    # Создаём админа если его нет
-    if admin_email not in users:
-        users[admin_email] = {
-            'email': admin_email,
-            'password': hash_password('Wertyxa120208'),
-            'full_name': 'Администратор Zetta',
-            'phone': '+7 (999) 999-99-99',
-            'registered_at': datetime.now().strftime('%d.%m.%Y %H:%M:%S'),
-            'addresses': [],
-            'profile_complete': True,
-            'is_admin': True
-        }
-        save_users(users)
-    
-    # Принудительный вход
-    session['user_email'] = admin_email
-    session['user_name'] = 'Администратор Zetta'
-    session['is_admin'] = True
-    
-    return "<script>alert('Вы вошли как администратор!'); window.location.href='/'</script>"
-
-@app.route('/test-email')
-def test_email():
-    test_code = generate_verification_code()
-    test_email = request.args.get('email', '')
-    
-    if not test_email:
-        return '''
-        <h2>Тест отправки email</h2>
-        <form method="get">
-            <input type="email" name="email" placeholder="Введите email для теста" required>
-            <button type="submit">Отправить тестовое письмо</button>
-        </form>
-        '''
-    
-    result = send_verification_email(test_email, test_code, 'registration')
-    if result:
-        return f'✅ Письмо отправлено на {test_email} с кодом: {test_code}'
-    else:
-        return f'❌ Ошибка отправки письма на {test_email}'
-
-@app.route('/admin-login')
-def admin_login():
-    session['user_email'] = 'ael360@mail.ru'
-    session['user_name'] = 'Администратор Zetta'
-    session['is_admin'] = True
-    return '<script>alert("Вы вошли как админ"); location.href="/"</script>'
-
-@app.route('/create-admin')
-def create_admin():
-    users = load_users()
-    users['ael360@mail.ru'] = {
-        'email': 'ael360@mail.ru',
-        'password': hash_password('Wertyxa120208'),
-        'full_name': 'Администратор Zetta',
-        'phone': '+7 (999) 999-99-99',
-        'registered_at': datetime.now().strftime('%d.%m.%Y %H:%M:%S'),
-        'addresses': [],
-        'profile_complete': True,
-        'is_admin': True
-    }
-    save_users(users)
-    return 'Админ создан! <a href="/admin-login">Войти</a>'
-
 if __name__ == '__main__':
     users = load_users()
-    admin_email = 'ael360@mail.ru'
-    
-    # Автоматическое создание админа при запуске
-    if admin_email not in users:
+    admin_email = 'admin@zetta.ru'
+    admin_exists = False
+
+    for email, user_data in users.items():
+        if user_data.get('is_admin', False):
+            admin_exists = True
+            print(f"Админ уже существует: {email}")
+            break
+
+    if not admin_exists:
         users[admin_email] = {
             'email': admin_email,
-            'password': hash_password('Wertyxa120208'),
+            'password': hash_password('admin123'),
             'full_name': 'Администратор Zetta',
             'phone': '+7 (999) 999-99-99',
             'registered_at': datetime.now().strftime('%d.%m.%Y %H:%M:%S'),
@@ -8114,10 +8019,11 @@ if __name__ == '__main__':
         save_users(users)
         print("=" * 50)
         print("АДМИН ZETTA СОЗДАН:")
-        print(f"Email: ael360@mail.ru")
-        print(f"Пароль: Wertyxa120208")
+        print(f"Email: {admin_email}")
+        print(f"Пароль: admin123")
         print("=" * 50)
-    
-    # Запуск на порту 8080 для хостинга
-    port = int(os.environ.get('PORT', 8080))
-    app.run(host='0.0.0.0', port=port, debug=False)
+
+    port = int(os.environ.get('PORT', 5000))
+    host = '0.0.0.0'
+    print(f"Запуск сервера на {host}:{port}")
+    app.run(host=host, port=port, debug=False)
