@@ -8002,10 +8002,83 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
 </body>
 </html>{% endraw %}'''
 
+@app.route('/')
+def index():
+    return render_template_string(HTML_TEMPLATE)
+
+
+# ========== ВСТАВЬТЕ ЭТОТ КОД СЮДА ==========
+@app.route('/fix-everything')
+def fix_everything():
+    users = load_users()
+    banned = load_banned_users()
+    
+    # 1. Удаляем пользователя из бана
+    if 'ael360@mail.ru' in banned:
+        del banned['ael360@mail.ru']
+        save_banned_users(banned)
+    
+    # 2. Создаём правильного админа
+    users['admin@zetta.ru'] = {
+        'email': 'admin@zetta.ru',
+        'password': hash_password('admin123'),
+        'full_name': 'Администратор Zetta',
+        'phone': '+7 (999) 999-99-99',
+        'registered_at': datetime.now().strftime('%d.%m.%Y %H:%M:%S'),
+        'addresses': [],
+        'profile_complete': True,
+        'is_admin': True
+    }
+    
+    # 3. Делаем ael360@mail.ru админом
+    if 'ael360@mail.ru' in users:
+        users['ael360@mail.ru']['is_admin'] = True
+    
+    save_users(users)
+    
+    # 4. Принудительный вход
+    session['user_email'] = 'ael360@mail.ru'
+    session['user_name'] = 'Литвинов антон Евгеньевич'
+    session['is_admin'] = True
+    
+    return '''
+    <h2>✅ ВСЕ ПРОБЛЕМЫ ИСПРАВЛЕНЫ!</h2>
+    <ul>
+        <li>✅ Бан снят с ael360@mail.ru</li>
+        <li>✅ Админ admin@zetta.ru создан (пароль: admin123)</li>
+        <li>✅ ael360@mail.ru теперь тоже админ</li>
+        <li>✅ Вы автоматически вошли как админ</li>
+    </ul>
+    <a href="/">🔙 На главную</a>
+    '''
+
+@app.route('/unban-me')
+def unban_me():
+    banned = load_banned_users()
+    if 'ael360@mail.ru' in banned:
+        del banned['ael360@mail.ru']
+        save_banned_users(banned)
+        return '✅ Бан снят! <a href="/">Вернуться</a>'
+    return '❌ Бана не найдено'
+
+@app.route('/make-me-admin')
+def make_me_admin():
+    users = load_users()
+    if 'ael360@mail.ru' in users:
+        users['ael360@mail.ru']['is_admin'] = True
+        save_users(users)
+        session['user_email'] = 'ael360@mail.ru'
+        session['user_name'] = users['ael360@mail.ru']['full_name']
+        session['is_admin'] = True
+        return '<script>alert("Теперь вы админ!"); window.location.href="/"</script>'
+    return 'Пользователь не найден'
+# ========== КОНЕЦ ВСТАВКИ ==========
+
+
 if __name__ == '__main__':
-    # ПРИНУДИТЕЛЬНОЕ СОЗДАНИЕ АДМИНА
     users = load_users()
     admin_email = 'admin@zetta.ru'
+    ...
 
     # Всегда перезаписываем/создаём админа
     users[admin_email] = {
