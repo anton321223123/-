@@ -8051,7 +8051,7 @@ def force_login():
     session['is_admin'] = True
     
     return "<script>alert('Вы вошли как администратор!'); window.location.href='/'</script>"
-    
+
 @app.route('/test-email')
 def test_email():
     test_code = generate_verification_code()
@@ -8071,7 +8071,8 @@ def test_email():
         return f'✅ Письмо отправлено на {test_email} с кодом: {test_code}'
     else:
         return f'❌ Ошибка отправки письма на {test_email}'
-    @app.route('/admin-login')
+
+@app.route('/admin-login')
 def admin_login():
     session['user_email'] = 'ael360@mail.ru'
     session['user_name'] = 'Администратор Zetta'
@@ -8093,7 +8094,7 @@ def create_admin():
     }
     save_users(users)
     return 'Админ создан! <a href="/admin-login">Войти</a>'
-        
+
 if __name__ == '__main__':
     users = load_users()
     admin_email = 'ael360@mail.ru'
