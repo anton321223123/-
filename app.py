@@ -598,7 +598,7 @@ def register_user(email, password, full_name, phone):
         'registered_at': datetime.now().strftime('%d.%m.%Y %H:%M:%S'),
         'addresses': [],
         'profile_complete': True,
-        'is_admin': email_lower == 'admin@zetta.ru'
+        'is_admin': email_lower == 'admin@zetta.ru'  # <-- ИСПРАВЛЕНО: email_lower вместо email
     }
     save_users(users)
     return True, "Регистрация успешна"
@@ -644,7 +644,7 @@ def login_user(email, password):
     if email_lower in users and users[email_lower]['password'] == hash_password(password):
         session['user_email'] = email_lower
         session['user_name'] = users[email_lower]['full_name']
-        session['is_admin'] = users[email_lower].get('is_admin', False)
+        session['is_admin'] = users[email_lower].get('is_admin', False)  # <-- ИСПРАВЛЕНО: берем is_admin из данных пользователя
         return True, "Вход выполнен"
     return False, "Неверный email или пароль"
 
@@ -8011,7 +8011,7 @@ if __name__ == '__main__':
 
     if not admin_exists:
         users[admin_email] = {
-            'email': admin_email,
+            'email': admin_email,  # <-- уже в нижнем регистре
             'password': hash_password('admin123'),
             'full_name': 'Администратор Zetta',
             'phone': '+7 (999) 999-99-99',
@@ -8023,7 +8023,7 @@ if __name__ == '__main__':
         save_users(users)
         print("=" * 50)
         print("АДМИН ZETTA СОЗДАН:")
-        print(f"Email: {admin_email}")
+        print(f"Email: admin@zetta.ru")
         print(f"Пароль: admin123")
         print("=" * 50)
 
