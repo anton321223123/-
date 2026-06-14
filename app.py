@@ -7990,6 +7990,10 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
 </body>
 </html>{% endraw %}'''
 
+@app.route('/')
+def index():
+    return render_template_string(HTML_TEMPLATE)
+
 @app.route('/health')
 def health_check():
     return 'OK', 200
