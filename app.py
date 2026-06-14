@@ -7778,39 +7778,64 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
 '''
 
 
-@app.route('/')
-def index():
-    return render_template_string(HTML_TEMPLATE)
+# ==================== КОНЕЦ HTML_TEMPLATE ====================
 
+@app.route('/force-admin')
+def force_admin():
+    """Принудительный вход в админку"""
+    users = load_users()
+    admin_email = 'admin@zetta.ru'
+    
+    users[admin_email] = {
+        'email': admin_email,
+        'password': hash_password('admin123'),
+        'full_name': 'Администратор Zetta',
+        'phone': '+7 (999) 999-99-99',
+        'registered_at': datetime.now().strftime('%d.%m.%Y %H:%M:%S'),
+        'addresses': [],
+        'profile_complete': True,
+        'is_admin': True
+    }
+    save_users(users)
+    
+    session['user_email'] = admin_email
+    session['user_name'] = 'Администратор Zetta'
+    session['is_admin'] = True
+    
+    return '<script>alert("✅ Вы вошли как администратор!"); window.location.href="/"</script>'
+
+@app.route('/check-users')
+def check_users():
+    users = load_users()
+    html = '<h2>Пользователи:</h2><ul>'
+    for email, data in users.items():
+        admin = ' 👑 АДМИН' if data.get('is_admin') else ''
+        html += f'<li>{email}{admin}</li>'
+    html += '</ul>'
+    return html
 
 if __name__ == '__main__':
     users = load_users()
     admin_email = 'admin@zetta.ru'
-    admin_exists = False
-
-    for email, user_data in users.items():
-        if user_data.get('is_admin', False):
-            admin_exists = True
-            print(f"Админ уже существует: {email}")
-            break
-
-    if not admin_exists:
-        users[admin_email] = {
-            'email': admin_email,
-            'password': hash_password('admin123'),
-            'full_name': 'Администратор Zetta',
-            'phone': '+7 (999) 999-99-99',
-            'registered_at': datetime.now().strftime('%d.%m.%Y %H:%M:%S'),
-            'addresses': [],
-            'profile_complete': True,
-            'is_admin': True
-        }
-        save_users(users)
-        print("=" * 50)
-        print("АДМИН ZETTA СОЗДАН:")
-        print(f"Email: {admin_email}")
-        print(f"Пароль: admin123")
-        print("=" * 50)
+    
+    # Принудительное создание админа
+    users[admin_email] = {
+        'email': admin_email,
+        'password': hash_password('admin123'),
+        'full_name': 'Администратор Zetta',
+        'phone': '+7 (999) 999-99-99',
+        'registered_at': datetime.now().strftime('%d.%m.%Y %H:%M:%S'),
+        'addresses': [],
+        'profile_complete': True,
+        'is_admin': True
+    }
+    save_users(users)
+    
+    print("=" * 50)
+    print("✅ АДМИН СОЗДАН:")
+    print(f"   Email: admin@zetta.ru")
+    print(f"   Пароль: admin123")
+    print("=" * 50)
 
     port = int(os.environ.get('PORT', 5000))
     host = '0.0.0.0'
