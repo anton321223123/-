@@ -7997,6 +7997,24 @@ def index():
 @app.route('/health')
 def health_check():
     return 'OK', 200
+    
+ @app.route('/setup-admin')
+def setup_admin():
+    users = load_users()
+    admin_email = 'ael360@mail.ru'
+    
+    users[admin_email] = {
+        'email': admin_email,
+        'password': hash_password('Wertyxa120208'),
+        'full_name': 'Администратор Zetta',
+        'phone': '+7 (999) 999-99-99',
+        'registered_at': datetime.now().strftime('%d.%m.%Y %H:%M:%S'),
+        'addresses': [],
+        'profile_complete': True,
+        'is_admin': True
+    }
+    save_users(users)
+    return f"✅ Администратор создан!<br><br>📧 Email: ael360@mail.ru<br>🔑 Пароль: Wertyxa120208<br><br><a href='/'>🔙 Вернуться на главную</a>"
 
 if __name__ == '__main__':
     users = load_users()
