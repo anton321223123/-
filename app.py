@@ -429,7 +429,6 @@ def send_receipt_email(order_data):
         payment_method_text = "Банковская карта (онлайн)" if order_data[
                                                                  'payment_method'] == 'card' else "Наличными при получении"
 
-        # Исправленная строка - разбиваем на части чтобы избежать проблем с кавычками
         items_html = ''
         for item in order_data['items']:
             discount_style = 'color:#e74c3c; font-weight:bold;' if item.get('sale_price') and item['price'] != item.get(
@@ -440,8 +439,8 @@ def send_receipt_email(order_data):
             <tr>
                 <td style="{discount_style}">{item["name"]} {discount_span}</td>
                 <td>{item["quantity"]}</td>
-                <td>{item["price"]:,} ₽</td>
-                <td>{item["total"]:,} ₽</td>
+                <td>{item["price"]:,} ₽</td
+                <td>{item["total"]:,} ₽</td
             </tr>
             '''
 
@@ -590,14 +589,14 @@ def register_user(email, password, full_name, phone):
 
     users[email_lower] = {
         'email': email_lower,
-        'password': password,  # Без хэширования
+        'password': password,
         'full_name': full_name,
         'phone': phone,
         'registered_at': datetime.now().strftime('%d.%m.%Y %H:%M:%S'),
         'addresses': [],
         'profile_complete': True,
         'is_admin': email_lower == 'admin@zetta.ru',
-        'personal_discount': None  # Добавляем поле для персональной скидки
+        'personal_discount': None
     }
     save_users(users)
     return True, "Регистрация успешна"
@@ -640,7 +639,7 @@ def login_user(email, password):
     if is_banned:
         return False, f"Ваш аккаунт забанен до {ban_until}. Причина: {ban_reason}. Сообщение от администратора: {ban_message}"
 
-    if email_lower in users and users[email_lower]['password'] == password:  # Сравнение без хэша
+    if email_lower in users and users[email_lower]['password'] == password:
         session['user_email'] = email_lower
         session['user_name'] = users[email_lower]['full_name']
         session['is_admin'] = users[email_lower].get('is_admin', False)
@@ -736,6 +735,37 @@ OFFICE_COORDINATES = {
     'lon': 83.7493,
     'address': 'г. Барнаул, ул. Юрина, 182/7'
 }
+
+
+# ИНИЦИАЛИЗАЦИЯ АДМИНА ПРИ ПЕРВОМ ЗАПРОСЕ
+def init_admin_on_first_request():
+    users = load_users()
+    admin_email = 'admin@zetta.ru'
+    admin_exists = False
+
+    for email, user_data in users.items():
+        if user_data.get('is_admin', False):
+            admin_exists = True
+            break
+
+    if not admin_exists:
+        users[admin_email] = {
+            'email': admin_email,
+            'password': 'admin123',
+            'full_name': 'Администратор Zetta',
+            'phone': '+7 (999) 999-99-99',
+            'registered_at': datetime.now().strftime('%d.%m.%Y %H:%M:%S'),
+            'addresses': [],
+            'profile_complete': True,
+            'is_admin': True,
+            'personal_discount': None
+        }
+        save_users(users)
+        print("=" * 50)
+        print("АДМИН ZETTA СОЗДАН:")
+        print(f"Email: {admin_email}")
+        print(f"Пароль: admin123")
+        print("=" * 50)
 
 
 # СТРАНИЦА "САЙТ НЕДОСТУПЕН" (503 ошибка)
@@ -1221,7 +1251,7 @@ def auth_status():
                 'email': user.get('email', ''),
                 'phone': user.get('phone', ''),
                 'registered_at': user.get('registered_at', ''),
-                'personal_discount': user.get('personal_discount', None)  # Передаём скидку
+                'personal_discount': user.get('personal_discount', None)
             },
             'is_admin': user.get('is_admin', False)
         })
@@ -1312,7 +1342,7 @@ def reset_password():
 
     users = load_users()
     if email_lower in users:
-        users[email_lower]['password'] = new_password  # Без хэша
+        users[email_lower]['password'] = new_password
         save_users(users)
         delete_password_reset(email_lower)
         return jsonify({'success': True, 'message': 'Пароль успешно изменён'})
@@ -1550,12 +1580,10 @@ def apply_promo():
     user_email = session['user_email']
     promocodes = load_promocodes_list()
 
-    # Проверяем персональную скидку пользователя
     users = load_users()
     user_data = users.get(user_email, {})
     personal_discount = user_data.get('personal_discount', None)
 
-    # Если введён специальный промокод для персональной скидки
     if promo_code == "PERSONAL_DISCOUNT" and personal_discount:
         session['promo_code'] = promo_code
         session['personal_discount_applied'] = True
@@ -1563,7 +1591,6 @@ def apply_promo():
                                                                    'type'] == 'percent' else f"{personal_discount['discount']} ₽"
         return jsonify({'success': True, 'discount_text': f"Персональная скидка: {discount_text}"})
 
-    # Стандартная проверка промокодов
     if is_promocode_used(user_email, promo_code):
         return jsonify({'success': False, 'message': 'Вы уже использовали этот промокод'})
 
@@ -2139,7 +2166,6 @@ def admin_get_users():
     if 'user_email' not in session or not is_admin(session['user_email']):
         return jsonify({'error': 'Access denied'}), 403
     users = load_users()
-    # Не показываем пароли в админке
     safe_users = {email: {k: v for k, v in data.items() if k != 'password'} for email, data in users.items()}
     return jsonify(safe_users)
 
@@ -2215,7 +2241,6 @@ def unban_user_route():
     return jsonify({'success': False, 'message': 'Пользователь не забанен'})
 
 
-# НОВЫЙ ЭНДПОИНТ ДЛЯ ПЕРСОНАЛЬНЫХ СКИДОК
 @app.route('/api/admin/set-personal-discount', methods=['POST'])
 def set_personal_discount():
     if 'user_email' not in session or not is_admin(session['user_email']):
@@ -2223,7 +2248,7 @@ def set_personal_discount():
 
     data = request.json
     user_email = data.get('email')
-    discount_type = data.get('type')  # 'percent' or 'fixed'
+    discount_type = data.get('type')
     discount_value = data.get('discount')
 
     if not user_email or not discount_type or discount_value is None:
@@ -8087,40 +8112,20 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
 '''
 
 
+# ВАЖНО: Вызываем инициализацию админа ПРИ КАЖДОМ ЗАПРОСЕ (на случай, если файл удалили)
+@app.before_request
+def init_admin():
+    init_admin_on_first_request()
+
+
 @app.route('/')
 def index():
     return render_template_string(HTML_TEMPLATE)
 
 
 if __name__ == '__main__':
-    users = load_users()
-    admin_email = 'admin@zetta.ru'
-    admin_exists = False
-
-    for email, user_data in users.items():
-        if user_data.get('is_admin', False):
-            admin_exists = True
-            print(f"Админ уже существует: {email}")
-            break
-
-    if not admin_exists:
-        users[admin_email] = {
-            'email': admin_email,
-            'password': 'admin123',  # Пароль без хэширования
-            'full_name': 'Администратор Zetta',
-            'phone': '+7 (999) 999-99-99',
-            'registered_at': datetime.now().strftime('%d.%m.%Y %H:%M:%S'),
-            'addresses': [],
-            'profile_complete': True,
-            'is_admin': True,
-            'personal_discount': None
-        }
-        save_users(users)
-        print("=" * 50)
-        print("АДМИН ZETTA СОЗДАН:")
-        print(f"Email: {admin_email}")
-        print(f"Пароль: admin123")
-        print("=" * 50)
+    # При локальном запуске тоже создаём админа
+    init_admin_on_first_request()
 
     port = int(os.environ.get('PORT', 5000))
     host = '0.0.0.0'
