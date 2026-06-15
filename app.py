@@ -10,7 +10,7 @@ from flask import Flask, render_template_string, request, jsonify, session, redi
 from werkzeug.utils import secure_filename
 import psycopg
 from psycopg.rows import dict_row
-from psycopg_pool import ConnectionPool
+from psycopg_pool import ConnectionPool  # ← ДОБАВИТЬ ЭТУ СТРОКУ
 
 app = Flask(__name__)
 app.secret_key = 'secret_key_for_zetta_12345_secure_2026'
@@ -314,7 +314,7 @@ def load_users_from_db():
 
 def get_user_from_db(email):
     conn = get_db_connection()
-    cur = conn.cursor(cursor_factory=RealDictCursor)
+    cur = conn.cursor(row_factory=dict_row)
     cur.execute("SELECT * FROM users WHERE email = %s", (email.lower(),))
     user = cur.fetchone()
     cur.close()
