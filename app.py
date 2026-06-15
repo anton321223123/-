@@ -6,8 +6,6 @@ from email.mime.multipart import MIMEMultipart
 from datetime import datetime, timedelta
 import random
 import os
-import hashlib
-import shutil
 from werkzeug.utils import secure_filename
 from functools import wraps
 
@@ -287,10 +285,6 @@ def load_promocodes_list():
 def save_promocodes_list(promocodes):
     with open(PROMOCODES_FILE, 'w', encoding='utf-8') as f:
         json.dump(promocodes, f, ensure_ascii=False, indent=2)
-
-
-def hash_password(password):
-    return hashlib.sha256(password.encode()).hexdigest()
 
 
 def generate_verification_code():
@@ -596,13 +590,14 @@ def register_user(email, password, full_name, phone):
 
     users[email_lower] = {
         'email': email_lower,
-        'password': hash_password(password),
+        'password': password,  # Без хэширования
         'full_name': full_name,
         'phone': phone,
         'registered_at': datetime.now().strftime('%d.%m.%Y %H:%M:%S'),
         'addresses': [],
         'profile_complete': True,
-        'is_admin': email_lower == 'admin@zetta.ru'
+        'is_admin': email_lower == 'admin@zetta.ru',
+        'personal_discount': None  # Добавляем поле для персональной скидки
     }
     save_users(users)
     return True, "Регистрация успешна"
@@ -645,7 +640,7 @@ def login_user(email, password):
     if is_banned:
         return False, f"Ваш аккаунт забанен до {ban_until}. Причина: {ban_reason}. Сообщение от администратора: {ban_message}"
 
-    if email_lower in users and users[email_lower]['password'] == hash_password(password):
+    if email_lower in users and users[email_lower]['password'] == password:  # Сравнение без хэша
         session['user_email'] = email_lower
         session['user_name'] = users[email_lower]['full_name']
         session['is_admin'] = users[email_lower].get('is_admin', False)
@@ -1225,7 +1220,8 @@ def auth_status():
                 'full_name': user.get('full_name', ''),
                 'email': user.get('email', ''),
                 'phone': user.get('phone', ''),
-                'registered_at': user.get('registered_at', '')
+                'registered_at': user.get('registered_at', ''),
+                'personal_discount': user.get('personal_discount', None)  # Передаём скидку
             },
             'is_admin': user.get('is_admin', False)
         })
@@ -1316,7 +1312,7 @@ def reset_password():
 
     users = load_users()
     if email_lower in users:
-        users[email_lower]['password'] = hash_password(new_password)
+        users[email_lower]['password'] = new_password  # Без хэша
         save_users(users)
         delete_password_reset(email_lower)
         return jsonify({'success': True, 'message': 'Пароль успешно изменён'})
@@ -1418,7 +1414,8 @@ def get_user_profile():
         'full_name': user.get('full_name', ''),
         'email': user.get('email', ''),
         'phone': user.get('phone', ''),
-        'registered_at': user.get('registered_at', '')
+        'registered_at': user.get('registered_at', ''),
+        'personal_discount': user.get('personal_discount', None)
     })
 
 
@@ -1553,6 +1550,20 @@ def apply_promo():
     user_email = session['user_email']
     promocodes = load_promocodes_list()
 
+    # Проверяем персональную скидку пользователя
+    users = load_users()
+    user_data = users.get(user_email, {})
+    personal_discount = user_data.get('personal_discount', None)
+
+    # Если введён специальный промокод для персональной скидки
+    if promo_code == "PERSONAL_DISCOUNT" and personal_discount:
+        session['promo_code'] = promo_code
+        session['personal_discount_applied'] = True
+        discount_text = f"{personal_discount['discount']}%" if personal_discount[
+                                                                   'type'] == 'percent' else f"{personal_discount['discount']} ₽"
+        return jsonify({'success': True, 'discount_text': f"Персональная скидка: {discount_text}"})
+
+    # Стандартная проверка промокодов
     if is_promocode_used(user_email, promo_code):
         return jsonify({'success': False, 'message': 'Вы уже использовали этот промокод'})
 
@@ -1570,8 +1581,11 @@ def apply_promo():
 def get_cart():
     cart = session.get('cart', {})
     promo_code = session.get('promo_code')
+    is_personal = session.get('personal_discount_applied', False)
     products = load_products()
     promocodes = load_promocodes_list()
+    users = load_users()
+    user_email = session.get('user_email')
 
     items = []
     subtotal = 0
@@ -1590,12 +1604,21 @@ def get_cart():
             })
 
     discount = 0
-    if promo_code and promo_code in promocodes and promocodes[promo_code].get('active', True):
-        promo = promocodes[promo_code]
-        if promo['type'] == 'percent':
-            discount = subtotal * promo['discount'] / 100
-        else:
-            discount = min(promo['discount'], subtotal)
+    if promo_code:
+        if is_personal and user_email:
+            user_data = users.get(user_email, {})
+            personal_discount = user_data.get('personal_discount', None)
+            if personal_discount:
+                if personal_discount['type'] == 'percent':
+                    discount = subtotal * personal_discount['discount'] / 100
+                else:
+                    discount = min(personal_discount['discount'], subtotal)
+        elif promo_code in promocodes and promocodes[promo_code].get('active', True):
+            promo = promocodes[promo_code]
+            if promo['type'] == 'percent':
+                discount = subtotal * promo['discount'] / 100
+            else:
+                discount = min(promo['discount'], subtotal)
 
     total = subtotal - discount
 
@@ -1618,8 +1641,10 @@ def checkout_card():
 
     cart = session.get('cart', {})
     promo_code = session.get('promo_code')
+    is_personal = session.get('personal_discount_applied', False)
     products = load_products()
     promocodes = load_promocodes_list()
+    users = load_users()
 
     distance = calculate_distance(delivery_address)
     delivery_date, period_text = calculate_delivery_date(distance)
@@ -1640,18 +1665,27 @@ def checkout_card():
             })
 
     discount = 0
-    if promo_code and promo_code in promocodes and promocodes[promo_code].get('active', True):
-        promo = promocodes[promo_code]
-        if promo['type'] == 'percent':
-            discount = subtotal * promo['discount'] / 100
-        else:
-            discount = min(promo['discount'], subtotal)
+    if promo_code:
+        if is_personal and session.get('user_email'):
+            user_data = users.get(session['user_email'], {})
+            personal_discount = user_data.get('personal_discount', None)
+            if personal_discount:
+                if personal_discount['type'] == 'percent':
+                    discount = subtotal * personal_discount['discount'] / 100
+                else:
+                    discount = min(personal_discount['discount'], subtotal)
+        elif promo_code in promocodes and promocodes[promo_code].get('active', True):
+            promo = promocodes[promo_code]
+            if promo['type'] == 'percent':
+                discount = subtotal * promo['discount'] / 100
+            else:
+                discount = min(promo['discount'], subtotal)
 
     total = subtotal - discount
 
     order_number = f"{datetime.now().strftime('%Y%m%d')}{random.randint(1000, 9999)}"
 
-    if promo_code and 'user_email' in session:
+    if promo_code and 'user_email' in session and not is_personal:
         mark_promocode_used(session['user_email'], promo_code, order_number)
 
     order_data = {
@@ -1705,6 +1739,7 @@ def checkout_card():
 
     session.pop('cart', None)
     session.pop('promo_code', None)
+    session.pop('personal_discount_applied', None)
 
     if email_sent:
         return jsonify({
@@ -1724,8 +1759,10 @@ def checkout_cash():
 
     cart = session.get('cart', {})
     promo_code = session.get('promo_code')
+    is_personal = session.get('personal_discount_applied', False)
     products = load_products()
     promocodes = load_promocodes_list()
+    users = load_users()
 
     distance = calculate_distance(delivery_address)
     delivery_date, period_text = calculate_delivery_date(distance)
@@ -1746,18 +1783,27 @@ def checkout_cash():
             })
 
     discount = 0
-    if promo_code and promo_code in promocodes and promocodes[promo_code].get('active', True):
-        promo = promocodes[promo_code]
-        if promo['type'] == 'percent':
-            discount = subtotal * promo['discount'] / 100
-        else:
-            discount = min(promo['discount'], subtotal)
+    if promo_code:
+        if is_personal and session.get('user_email'):
+            user_data = users.get(session['user_email'], {})
+            personal_discount = user_data.get('personal_discount', None)
+            if personal_discount:
+                if personal_discount['type'] == 'percent':
+                    discount = subtotal * personal_discount['discount'] / 100
+                else:
+                    discount = min(personal_discount['discount'], subtotal)
+        elif promo_code in promocodes and promocodes[promo_code].get('active', True):
+            promo = promocodes[promo_code]
+            if promo['type'] == 'percent':
+                discount = subtotal * promo['discount'] / 100
+            else:
+                discount = min(promo['discount'], subtotal)
 
     total = subtotal - discount
 
     order_number = f"{datetime.now().strftime('%Y%m%d')}{random.randint(1000, 9999)}"
 
-    if promo_code and 'user_email' in session:
+    if promo_code and 'user_email' in session and not is_personal:
         mark_promocode_used(session['user_email'], promo_code, order_number)
 
     order_data = {
@@ -1809,6 +1855,7 @@ def checkout_cash():
 
     session.pop('cart', None)
     session.pop('promo_code', None)
+    session.pop('personal_discount_applied', None)
 
     if email_sent:
         return jsonify({
@@ -2092,7 +2139,9 @@ def admin_get_users():
     if 'user_email' not in session or not is_admin(session['user_email']):
         return jsonify({'error': 'Access denied'}), 403
     users = load_users()
-    return jsonify(users)
+    # Не показываем пароли в админке
+    safe_users = {email: {k: v for k, v in data.items() if k != 'password'} for email, data in users.items()}
+    return jsonify(safe_users)
 
 
 @app.route('/api/admin/make-admin', methods=['POST'])
@@ -2166,8 +2215,59 @@ def unban_user_route():
     return jsonify({'success': False, 'message': 'Пользователь не забанен'})
 
 
-# ==================== ГЛАВНАЯ СТРАНИЦА ====================
+# НОВЫЙ ЭНДПОИНТ ДЛЯ ПЕРСОНАЛЬНЫХ СКИДОК
+@app.route('/api/admin/set-personal-discount', methods=['POST'])
+def set_personal_discount():
+    if 'user_email' not in session or not is_admin(session['user_email']):
+        return jsonify({'error': 'Access denied'}), 403
 
+    data = request.json
+    user_email = data.get('email')
+    discount_type = data.get('type')  # 'percent' or 'fixed'
+    discount_value = data.get('discount')
+
+    if not user_email or not discount_type or discount_value is None:
+        return jsonify({'success': False, 'message': 'Заполните все поля'})
+
+    users = load_users()
+    user_email_lower = user_email.lower()
+
+    if user_email_lower not in users:
+        return jsonify({'success': False, 'message': 'Пользователь не найден'})
+
+    users[user_email_lower]['personal_discount'] = {
+        'type': discount_type,
+        'discount': discount_value,
+        'active': True
+    }
+    save_users(users)
+
+    return jsonify({'success': True, 'message': f'Персональная скидка установлена для {user_email}'})
+
+
+@app.route('/api/admin/remove-personal-discount', methods=['POST'])
+def remove_personal_discount():
+    if 'user_email' not in session or not is_admin(session['user_email']):
+        return jsonify({'error': 'Access denied'}), 403
+
+    data = request.json
+    user_email = data.get('email')
+
+    if not user_email:
+        return jsonify({'success': False, 'message': 'Не указан email'})
+
+    users = load_users()
+    user_email_lower = user_email.lower()
+
+    if user_email_lower in users:
+        users[user_email_lower]['personal_discount'] = None
+        save_users(users)
+        return jsonify({'success': True, 'message': 'Персональная скидка удалена'})
+
+    return jsonify({'success': False, 'message': 'Пользователь не найден'})
+
+
+# ГЛАВНАЯ СТРАНИЦА (HTML с анимацией молнии и глазиками)
 HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
 <html lang="ru">
 <head>
@@ -2274,6 +2374,33 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
             }
         }
 
+        @keyframes lightningFlash {
+            0% {
+                text-shadow: 0 0 5px #fff, 0 0 10px #ff0, 0 0 15px #ff0, 0 0 20px #ff7e00;
+                color: #ffcc00;
+            }
+            20% {
+                text-shadow: 0 0 20px #fff, 0 0 30px #ff0, 0 0 40px #ff7e00, 0 0 50px #ff4400;
+                color: #ffff66;
+            }
+            40% {
+                text-shadow: 0 0 5px #fff, 0 0 10px #ff0, 0 0 15px #ff0, 0 0 20px #ff7e00;
+                color: #ffcc00;
+            }
+            60% {
+                text-shadow: 0 0 20px #fff, 0 0 35px #ff0, 0 0 45px #ff7e00, 0 0 60px #ff4400;
+                color: #ffff88;
+            }
+            80% {
+                text-shadow: 0 0 5px #fff, 0 0 10px #ff0, 0 0 15px #ff0, 0 0 20px #ff7e00;
+                color: #ffcc00;
+            }
+            100% {
+                text-shadow: 0 0 15px #fff, 0 0 25px #ff0, 0 0 35px #ff7e00, 0 0 45px #ff4400;
+                color: #ffff66;
+            }
+        }
+
         .animate-fly {
             animation: flyToCart 0.6s ease-in forwards !important;
             position: fixed !important;
@@ -2283,6 +2410,11 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
 
         .cart-icon-animate {
             animation: pulse 0.3s ease-in-out;
+        }
+
+        .lightning {
+            animation: lightningFlash 0.8s ease-in-out infinite;
+            display: inline-block;
         }
 
         /* Анимации для появления элементов */
@@ -2382,7 +2514,7 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
         }
 
         .logo-icon:hover {
-            animation: pulse 0.5s ease-in-out;
+            animation: lightningFlash 0.5s ease-in-out;
         }
 
         .logo-text {
@@ -4139,6 +4271,21 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
             color: #e0e0e0;
         }
 
+        .personal-discount-info {
+            background: #1a2a1a;
+            border: 1px solid #27ae60;
+            border-radius: 8px;
+            padding: 0.75rem;
+            margin-top: 1rem;
+            text-align: center;
+        }
+
+        .personal-discount-info span {
+            color: #27ae60;
+            font-weight: bold;
+            font-size: 1.1rem;
+        }
+
         .orders-list {
             background: #0f0f0f;
             border: 1px solid #2a2a2a;
@@ -4242,6 +4389,7 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
 
         .form-group {
             margin-bottom: 1.5rem;
+            position: relative;
         }
 
         .form-label {
@@ -4266,6 +4414,34 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
             outline: none;
             border-color: #27ae60;
             box-shadow: 0 0 10px rgba(39, 174, 96, 0.3);
+        }
+
+        /* Стили для поля с паролем и глазиком */
+        .password-wrapper {
+            position: relative;
+            width: 100%;
+        }
+
+        .password-wrapper input {
+            width: 100%;
+            padding-right: 45px;
+        }
+
+        .toggle-password {
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            cursor: pointer;
+            font-size: 1.2rem;
+            color: #888;
+            transition: all 0.2s;
+            background: transparent;
+            border: none;
+        }
+
+        .toggle-password:hover {
+            color: #27ae60;
         }
 
         .payment-methods {
@@ -4857,7 +5033,7 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
     <div class="header">
         <div class="header-content">
             <div class="logo" onclick="goToHome()">
-                <span class="logo-icon">⚡</span>
+                <span class="logo-icon lightning">⚡</span>
                 <span class="logo-text">ZETTA</span>
             </div>
             <div class="nav-links">
@@ -5125,6 +5301,7 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
                         <div class="profile-label">Дата регистрации</div>
                         <div class="profile-value" id="profileRegistered"></div>
                     </div>
+                    <div id="personalDiscountBlock"></div>
                     <button class="profile-edit-btn" onclick="editProfile()">Редактировать профиль</button>
                     <button class="logout-btn" onclick="logout()">Выйти</button>
                 </div>
@@ -5145,6 +5322,7 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
                     <div class="admin-tab active" onclick="switchAdminTab('products')">Товары</div>
                     <div class="admin-tab" onclick="switchAdminTab('news')">Новости</div>
                     <div class="admin-tab" onclick="switchAdminTab('promocodes')">Промокоды</div>
+                    <div class="admin-tab" onclick="switchAdminTab('personal')">Персональные скидки</div>
                     <div class="admin-tab" onclick="switchAdminTab('reviews')">Отзывы</div>
                     <div class="admin-tab" onclick="switchAdminTab('orders')">Заказы</div>
                     <div class="admin-tab" onclick="switchAdminTab('users')">Пользователи</div>
@@ -5209,6 +5387,22 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
                     <div class="admin-form">
                         <h3>Список промокодов</h3>
                         <div id="promocodesList"></div>
+                    </div>
+                </div>
+
+                <div id="adminPersonal" class="admin-section">
+                    <div class="admin-form">
+                        <h3>Персональная скидка пользователю</h3>
+                        <div>
+                            <input type="text" id="personalUserEmail" placeholder="Email пользователя" style="margin-bottom: 0.5rem;">
+                            <select id="personalDiscountType" style="margin-bottom: 0.5rem;">
+                                <option value="percent">Процентная скидка</option>
+                                <option value="fixed">Фиксированная скидка (₽)</option>
+                            </select>
+                            <input type="number" id="personalDiscountValue" placeholder="Величина скидки" style="margin-bottom: 0.5rem;">
+                            <button type="button" onclick="setPersonalDiscount()">Установить скидку</button>
+                            <button type="button" onclick="removePersonalDiscount()" style="margin-top: 0.5rem; background: #e74c3c;">Удалить скидку</button>
+                        </div>
                     </div>
                 </div>
 
@@ -5426,8 +5620,14 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
                 <p>Введите код из письма</p>
                 <input type="text" id="resetCode" class="verify-code-input" placeholder="000000" maxlength="6" style="margin: 1rem 0;">
                 <div id="resetTimer" class="verify-timer">Код действителен: 5:00</div>
-                <input type="password" id="newPassword" class="auth-input" style="width: 100%; margin: 1rem 0;" placeholder="Новый пароль">
-                <input type="password" id="confirmNewPassword" class="auth-input" style="width: 100%; margin: 1rem 0;" placeholder="Подтвердите пароль">
+                <div class="password-wrapper">
+                    <input type="password" id="newPassword" class="auth-input" placeholder="Новый пароль" style="width: 100%; margin: 1rem 0; padding-right: 45px;">
+                    <button type="button" class="toggle-password" onclick="togglePasswordVisibility('newPassword')">👁️</button>
+                </div>
+                <div class="password-wrapper">
+                    <input type="password" id="confirmNewPassword" class="auth-input" placeholder="Подтвердите пароль" style="width: 100%; margin: 1rem 0; padding-right: 45px;">
+                    <button type="button" class="toggle-password" onclick="togglePasswordVisibility('confirmNewPassword')">👁️</button>
+                </div>
                 <button class="auth-btn" onclick="resetPassword()" style="width: 100%;">Сбросить пароль</button>
             </div>
         </div>
@@ -5474,7 +5674,10 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
 
             <div id="loginForm" class="auth-form">
                 <input type="email" id="loginEmail" class="auth-input" placeholder="Email" required>
-                <input type="password" id="loginPassword" class="auth-input" placeholder="Пароль" required>
+                <div class="password-wrapper">
+                    <input type="password" id="loginPassword" class="auth-input" placeholder="Пароль" style="padding-right: 45px;">
+                    <button type="button" class="toggle-password" onclick="togglePasswordVisibility('loginPassword')">👁️</button>
+                </div>
                 <div class="forgot-password">
                     <a onclick="showForgotPasswordModal()">Забыли пароль?</a>
                 </div>
@@ -5485,8 +5688,14 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
                 <input type="text" id="regFullName" class="auth-input" placeholder="ФИО" required>
                 <input type="email" id="regEmail" class="auth-input" placeholder="Email" required>
                 <input type="tel" id="regPhone" class="auth-input" placeholder="Телефон" required>
-                <input type="password" id="regPassword" class="auth-input" placeholder="Пароль" required>
-                <input type="password" id="regConfirmPassword" class="auth-input" placeholder="Подтверждение пароля" required>
+                <div class="password-wrapper">
+                    <input type="password" id="regPassword" class="auth-input" placeholder="Пароль" style="padding-right: 45px;">
+                    <button type="button" class="toggle-password" onclick="togglePasswordVisibility('regPassword')">👁️</button>
+                </div>
+                <div class="password-wrapper">
+                    <input type="password" id="regConfirmPassword" class="auth-input" placeholder="Подтверждение пароля" style="padding-right: 45px;">
+                    <button type="button" class="toggle-password" onclick="togglePasswordVisibility('regConfirmPassword')">👁️</button>
+                </div>
                 <button class="auth-btn" onclick="sendVerificationCode()">Зарегистрироваться</button>
             </div>
         </div>
@@ -5531,6 +5740,16 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
         let newsData = [];
         let currentCategory = 'all';
         let currentSearchTerm = '';
+
+        // Функция для переключения видимости пароля
+        function togglePasswordVisibility(inputId) {
+            const input = document.getElementById(inputId);
+            if (input.type === 'password') {
+                input.type = 'text';
+            } else {
+                input.type = 'password';
+            }
+        }
 
         // Функция анимации полёта товара в корзину
         function animateToCart(element) {
@@ -6079,7 +6298,7 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
             document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active'));
             document.querySelectorAll('.admin-section').forEach(s => s.classList.remove('active'));
 
-            const tabs = ['products', 'news', 'promocodes', 'reviews', 'orders', 'users'];
+            const tabs = ['products', 'news', 'promocodes', 'personal', 'reviews', 'orders', 'users'];
             const index = tabs.indexOf(tab);
             if (index !== -1) {
                 document.querySelectorAll('.admin-tab')[index].classList.add('active');
@@ -6425,6 +6644,58 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
             }
         }
 
+        function setPersonalDiscount() {
+            const email = document.getElementById('personalUserEmail').value.trim();
+            const type = document.getElementById('personalDiscountType').value;
+            const discount = parseInt(document.getElementById('personalDiscountValue').value);
+
+            if (!email) {
+                alert('Введите email пользователя');
+                return;
+            }
+            if (!discount || discount <= 0) {
+                alert('Введите корректную величину скидки');
+                return;
+            }
+
+            fetch('/api/admin/set-personal-discount', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({email: email, type: type, discount: discount})
+            }).then(res => res.json()).then(data => {
+                if (data.success) {
+                    alert(data.message);
+                    document.getElementById('personalUserEmail').value = '';
+                    document.getElementById('personalDiscountValue').value = '';
+                    loadAdminUsers();
+                } else {
+                    alert(data.message);
+                }
+            });
+        }
+
+        function removePersonalDiscount() {
+            const email = document.getElementById('personalUserEmail').value.trim();
+            if (!email) {
+                alert('Введите email пользователя');
+                return;
+            }
+
+            fetch('/api/admin/remove-personal-discount', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({email: email})
+            }).then(res => res.json()).then(data => {
+                if (data.success) {
+                    alert(data.message);
+                    document.getElementById('personalUserEmail').value = '';
+                    loadAdminUsers();
+                } else {
+                    alert(data.message);
+                }
+            });
+        }
+
         function loadPromoCodesForFrontend() {
             fetch('/api/promocodes')
                 .then(res => res.json())
@@ -6554,6 +6825,8 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
                         <div class="admin-users-list">
                             ${usersArray.map(u => {
                                 const banSelectId = `banSelect_${u.email.replace(/[^a-zA-Z0-9]/g, '_')}`;
+                                const personalDiscountText = u.personal_discount ? 
+                                    ` | 🎁 Персональная скидка: ${u.personal_discount.type === 'percent' ? u.personal_discount.discount + '%' : u.personal_discount.discount + ' ₽'}` : '';
                                 return `
                                 <div class="admin-user-card">
                                     <div class="admin-user-info">
@@ -6561,6 +6834,7 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
                                         <div class="admin-user-details">
                                             ФИО: ${escapeHtml(u.full_name || '-')} | Телефон: ${escapeHtml(u.phone || '-')} | Регистрация: ${u.registered_at || '-'}
                                             ${u.is_admin ? ' | 👑 Администратор' : ''}
+                                            ${personalDiscountText}
                                         </div>
                                     </div>
                                     <div class="admin-user-actions">
@@ -7026,6 +7300,24 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
                         if (vlogEditBtn) {
                             vlogEditBtn.style.display = isAdmin ? 'block' : 'none';
                         }
+
+                        // Показываем персональную скидку в профиле
+                        if (currentUser && currentUser.personal_discount) {
+                            const discountBlock = document.getElementById('personalDiscountBlock');
+                            if (discountBlock) {
+                                const discountText = currentUser.personal_discount.type === 'percent' ? 
+                                    `${currentUser.personal_discount.discount}%` : 
+                                    `${currentUser.personal_discount.discount} ₽`;
+                                discountBlock.innerHTML = `
+                                    <div class="personal-discount-info">
+                                        🎁 <strong>ВАША ПЕРСОНАЛЬНАЯ СКИДКА НА ВЕСЬ АССОРТИМЕНТ:</strong> <span>${discountText}</span>
+                                    </div>
+                                `;
+                            }
+                        } else {
+                            const discountBlock = document.getElementById('personalDiscountBlock');
+                            if (discountBlock) discountBlock.innerHTML = '';
+                        }
                     } else {
                         isLoggedIn = false;
                         isAdmin = false;
@@ -7045,6 +7337,9 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
 
                         const vlogEditBtn = document.getElementById('vlogEditBtn');
                         if (vlogEditBtn) vlogEditBtn.style.display = 'none';
+
+                        const discountBlock = document.getElementById('personalDiscountBlock');
+                        if (discountBlock) discountBlock.innerHTML = '';
 
                         if (data.banned) {
                             window.location.href = '/';
@@ -7165,6 +7460,20 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
                     document.getElementById('profileEmail').textContent = data.email;
                     document.getElementById('profilePhone').textContent = data.phone;
                     document.getElementById('profileRegistered').textContent = data.registered_at;
+
+                    if (data.personal_discount) {
+                        const discountBlock = document.getElementById('personalDiscountBlock');
+                        if (discountBlock) {
+                            const discountText = data.personal_discount.type === 'percent' ? 
+                                `${data.personal_discount.discount}%` : 
+                                `${data.personal_discount.discount} ₽`;
+                            discountBlock.innerHTML = `
+                                <div class="personal-discount-info">
+                                    🎁 <strong>ВАША ПЕРСОНАЛЬНАЯ СКИДКА НА ВЕСЬ АССОРТИМЕНТ:</strong> <span>${discountText}</span>
+                                </div>
+                            `;
+                        }
+                    }
                 });
         }
 
@@ -7797,13 +8106,14 @@ if __name__ == '__main__':
     if not admin_exists:
         users[admin_email] = {
             'email': admin_email,
-            'password': hash_password('admin123'),
+            'password': 'admin123',  # Пароль без хэширования
             'full_name': 'Администратор Zetta',
             'phone': '+7 (999) 999-99-99',
             'registered_at': datetime.now().strftime('%d.%m.%Y %H:%M:%S'),
             'addresses': [],
             'profile_complete': True,
-            'is_admin': True
+            'is_admin': True,
+            'personal_discount': None
         }
         save_users(users)
         print("=" * 50)
