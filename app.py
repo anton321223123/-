@@ -8,9 +8,9 @@ from datetime import datetime, timedelta
 from functools import wraps
 from flask import Flask, render_template_string, request, jsonify, session, redirect, url_for
 from werkzeug.utils import secure_filename
-import psycopg2
-from psycopg2.extras import RealDictCursor
-from psycopg2.pool import SimpleConnectionPool
+import psycopg
+from psycopg.rows import dict_row
+from psycopg_pool import ConnectionPool
 
 app = Flask(__name__)
 app.secret_key = 'secret_key_for_zetta_12345_secure_2026'
@@ -24,11 +24,8 @@ os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 DATABASE_URL = "postgresql://gen_user:nb7pNMZs059Cv*@e3bfa5f723e3d18210991d2d.twc1.net:5432/default_db?sslmode=require"
 
 # Создаем пул соединений
-db_pool = SimpleConnectionPool(
-    minconn=1,
-    maxconn=10,
-    dsn=DATABASE_URL
-)
+db_pool = ConnectionPool(DATABASE_URL, min_size=1, max_size=10)
+
 
 
 def get_db_connection():
@@ -287,7 +284,7 @@ def init_db():
 # Вспомогательные функции для работы с БД
 def load_users_from_db():
     conn = get_db_connection()
-    cur = conn.cursor(cursor_factory=RealDictCursor)
+    cur = conn.cursor(row_factory=dict_row)
     cur.execute(
         "SELECT email, full_name, phone, registered_at, profile_complete, is_admin, personal_discount_type, personal_discount_value FROM users")
     users = cur.fetchall()
