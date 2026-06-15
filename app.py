@@ -8,9 +8,9 @@ from datetime import datetime, timedelta
 from functools import wraps
 from flask import Flask, render_template_string, request, jsonify, session, redirect, url_for
 from werkzeug.utils import secure_filename
+from psycopg_pool import ConnectionPool
 import psycopg
 from psycopg.rows import dict_row
-from psycopg_pool import ConnectionPool  # ← ДОБАВИТЬ ЭТУ СТРОКУ
 
 app = Flask(__name__)
 app.secret_key = 'secret_key_for_zetta_12345_secure_2026'
@@ -25,7 +25,6 @@ DATABASE_URL = "postgresql://gen_user:nb7pNMZs059Cv*@e3bfa5f723e3d18210991d2d.tw
 
 # Создаем пул соединений
 db_pool = ConnectionPool(DATABASE_URL, min_size=1, max_size=10)
-
 
 
 def get_db_connection():
@@ -281,7 +280,8 @@ def init_db():
     print("=" * 60)
 
 
-# Вспомогательные функции для работы с БД
+# ==================== ФУНКЦИИ ДЛЯ РАБОТЫ С БД (PSYCOPG3) ====================
+
 def load_users_from_db():
     conn = get_db_connection()
     cur = conn.cursor(row_factory=dict_row)
@@ -390,7 +390,7 @@ def remove_personal_discount_db(email):
 
 def load_reviews_from_db():
     conn = get_db_connection()
-    cur = conn.cursor(cursor_factory=RealDictCursor)
+    cur = conn.cursor(row_factory=dict_row)
     cur.execute("SELECT id, name, rating, text, date FROM reviews ORDER BY id DESC")
     reviews = cur.fetchall()
     cur.close()
@@ -421,7 +421,7 @@ def delete_review_from_db(review_id):
 
 def load_products_from_db():
     conn = get_db_connection()
-    cur = conn.cursor(cursor_factory=RealDictCursor)
+    cur = conn.cursor(row_factory=dict_row)
     cur.execute("SELECT * FROM products ORDER BY id")
     products = cur.fetchall()
     cur.close()
@@ -465,7 +465,7 @@ def delete_product_from_db(product_id):
 
 def load_news_from_db():
     conn = get_db_connection()
-    cur = conn.cursor(cursor_factory=RealDictCursor)
+    cur = conn.cursor(row_factory=dict_row)
     cur.execute("SELECT * FROM news ORDER BY id")
     news = cur.fetchall()
     cur.close()
@@ -509,7 +509,7 @@ def delete_news_from_db(news_id):
 
 def load_promocodes_from_db():
     conn = get_db_connection()
-    cur = conn.cursor(cursor_factory=RealDictCursor)
+    cur = conn.cursor(row_factory=dict_row)
     cur.execute("SELECT * FROM promocodes")
     promocodes = cur.fetchall()
     cur.close()
@@ -583,7 +583,7 @@ def mark_promocode_used_db(user_email, promo_code, order_number):
 
 def load_orders_from_db():
     conn = get_db_connection()
-    cur = conn.cursor(cursor_factory=RealDictCursor)
+    cur = conn.cursor(row_factory=dict_row)
     cur.execute("SELECT user_email, order_data, order_number, created_at FROM orders ORDER BY created_at DESC")
     orders = cur.fetchall()
     cur.close()
@@ -611,7 +611,7 @@ def save_order_to_db(user_email, order_data):
 
 def get_user_orders_from_db(user_email):
     conn = get_db_connection()
-    cur = conn.cursor(cursor_factory=RealDictCursor)
+    cur = conn.cursor(row_factory=dict_row)
     cur.execute("SELECT order_data FROM orders WHERE user_email = %s ORDER BY created_at DESC", (user_email.lower(),))
     orders = cur.fetchall()
     cur.close()
@@ -621,7 +621,7 @@ def get_user_orders_from_db(user_email):
 
 def load_banned_users_from_db():
     conn = get_db_connection()
-    cur = conn.cursor(cursor_factory=RealDictCursor)
+    cur = conn.cursor(row_factory=dict_row)
     cur.execute("SELECT * FROM banned_users")
     banned = cur.fetchall()
     cur.close()
@@ -666,7 +666,7 @@ def remove_banned_user_from_db(email):
 
 def get_verification_code_from_db(email):
     conn = get_db_connection()
-    cur = conn.cursor(cursor_factory=RealDictCursor)
+    cur = conn.cursor(row_factory=dict_row)
     cur.execute("SELECT * FROM verification_codes WHERE email = %s", (email.lower(),))
     result = cur.fetchone()
     cur.close()
@@ -703,7 +703,7 @@ def delete_verification_code_from_db(email):
 
 def get_password_reset_code_from_db(email):
     conn = get_db_connection()
-    cur = conn.cursor(cursor_factory=RealDictCursor)
+    cur = conn.cursor(row_factory=dict_row)
     cur.execute("SELECT * FROM password_reset_codes WHERE email = %s", (email.lower(),))
     result = cur.fetchone()
     cur.close()
@@ -737,7 +737,7 @@ def delete_password_reset_code_from_db(email):
 
 def load_vlog_from_db():
     conn = get_db_connection()
-    cur = conn.cursor(cursor_factory=RealDictCursor)
+    cur = conn.cursor(row_factory=dict_row)
     cur.execute("SELECT text FROM vlog WHERE id = 1")
     result = cur.fetchone()
     cur.close()
@@ -770,7 +770,7 @@ def add_chat_message_to_db(user_email, message, msg_type):
 
 def get_chat_messages_from_db(user_email):
     conn = get_db_connection()
-    cur = conn.cursor(cursor_factory=RealDictCursor)
+    cur = conn.cursor(row_factory=dict_row)
     cur.execute("SELECT * FROM chat_messages WHERE user_email = %s ORDER BY created_at", (user_email.lower(),))
     messages = cur.fetchall()
     cur.close()
@@ -929,13 +929,11 @@ def send_receipt_email(order_data):
         msg['Cc'] = EMAIL_CONFIG['email']
         msg['Subject'] = f'Чек оплаты #{order_data["order_number"]} - Zetta'
 
-        payment_method_text = "Банковская карта (онлайн)" if order_data[
-                                                                 'payment_method'] == 'card' else "Наличными при получении"
+        payment_method_text = "Банковская карта (онлайн)" if order_data['payment_method'] == 'card' else "Наличными при получении"
 
         items_html = ''
         for item in order_data['items']:
-            discount_span = '<span style="color:#e74c3c; font-size:0.8rem;">🔥 Скидка!</span>' if item.get(
-                'price') != item.get('original_price', item['price']) else ''
+            discount_span = '<span style="color:#e74c3c; font-size:0.8rem;">🔥 Скидка!</span>' if item.get('price') != item.get('original_price', item['price']) else ''
             items_html += f'''
             <tr>
                 <td>{item["name"]} {discount_span}</td>
@@ -1218,6 +1216,8 @@ def get_daily_random_reviews():
 init_db()
 
 
+# ==================== МАРШРУТЫ ====================
+
 @app.before_request
 def check_ban():
     if request.endpoint == 'static':
@@ -1229,7 +1229,6 @@ def check_ban():
             return redirect(f'/ban-page?email={session["user_email"]}')
 
 
-# Страница бана
 @app.route('/ban-page')
 def ban_page():
     email = request.args.get('email', '')
@@ -1454,8 +1453,7 @@ def resend_verification():
 
     new_code = generate_verification_code()
     expires_at = (datetime.now() + timedelta(minutes=5)).timestamp()
-    save_verification_code_to_db(email, new_code, expires_at, temp_data['full_name'], temp_data['phone'],
-                                 temp_data['password'])
+    save_verification_code_to_db(email, new_code, expires_at, temp_data['full_name'], temp_data['phone'], temp_data['password'])
 
     if send_verification_email(email, new_code, 'registration'):
         return jsonify({'success': True, 'message': 'Новый код отправлен на почту'})
@@ -1597,8 +1595,7 @@ def apply_promo():
     if promo_code == "PERSONAL_DISCOUNT" and personal_discount:
         session['promo_code'] = promo_code
         session['personal_discount_applied'] = True
-        discount_text = f"{user['personal_discount_value']}%" if user[
-                                                                     'personal_discount_type'] == 'percent' else f"{user['personal_discount_value']} ₽"
+        discount_text = f"{user['personal_discount_value']}%" if user['personal_discount_type'] == 'percent' else f"{user['personal_discount_value']} ₽"
         return jsonify({'success': True, 'discount_text': f"Персональная скидка: {discount_text}"})
 
     if is_promocode_used_db(user_email, promo_code):
@@ -1607,8 +1604,7 @@ def apply_promo():
     if promo_code in promocodes and promocodes[promo_code]['active']:
         session['promo_code'] = promo_code
         promo_data = promocodes[promo_code]
-        discount_text = f"{promo_data['discount']}%" if promo_data[
-                                                            'type'] == 'percent' else f"{promo_data['discount']} ₽"
+        discount_text = f"{promo_data['discount']}%" if promo_data['type'] == 'percent' else f"{promo_data['discount']} ₽"
         return jsonify({'success': True, 'discount_text': discount_text})
     else:
         return jsonify({'success': False, 'message': 'Неверный промокод'})
@@ -1768,11 +1764,9 @@ def checkout_card():
     session.pop('personal_discount_applied', None)
 
     if email_sent:
-        return jsonify({
-                           'message': f'✅ Заказ #{order_number} оплачен картой онлайн! Сумма {total:,} ₽ поступит на номер 89520062357. Чек отправлен на {customer_email}.'})
+        return jsonify({'message': f'✅ Заказ #{order_number} оплачен картой онлайн! Сумма {total:,} ₽ поступит на номер 89520062357. Чек отправлен на {customer_email}.'})
     else:
-        return jsonify({
-                           'message': f'✅ Заказ #{order_number} оплачен картой онлайн! Сумма {total:,} ₽ поступит на номер 89520062357.'})
+        return jsonify({'message': f'✅ Заказ #{order_number} оплачен картой онлайн! Сумма {total:,} ₽ поступит на номер 89520062357.'})
 
 
 @app.route('/api/checkout-cash', methods=['POST'])
@@ -1874,8 +1868,7 @@ def checkout_cash():
     session.pop('personal_discount_applied', None)
 
     if email_sent:
-        return jsonify({
-                           'message': f'✅ Заказ #{order_number} оформлен! Оплата {total:,} ₽ наличными при получении. Чек отправлен на {customer_email}.'})
+        return jsonify({'message': f'✅ Заказ #{order_number} оформлен! Оплата {total:,} ₽ наличными при получении. Чек отправлен на {customer_email}.'})
     else:
         return jsonify({'message': f'✅ Заказ #{order_number} оформлен! Оплата {total:,} ₽ наличными при получении.'})
 
@@ -2138,8 +2131,7 @@ def ban_user_route():
         session.clear()
 
     ban_until = datetime.now() + timedelta(minutes=duration_minutes)
-    return jsonify(
-        {'success': True, 'message': f'Пользователь {email} забанен до {ban_until.strftime("%d.%m.%Y %H:%M:%S")}'})
+    return jsonify({'success': True, 'message': f'Пользователь {email} забанен до {ban_until.strftime("%d.%m.%Y %H:%M:%S")}'})
 
 
 @app.route('/api/admin/unban-user', methods=['POST'])
@@ -8375,6 +8367,7 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
     </script>
 </body>
 </html>{% endraw %}'''
+
 
 
 @app.route('/')
