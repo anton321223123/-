@@ -24,7 +24,7 @@ app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 # Конфигурация PostgreSQL
-DATABASE_URL = "postgresql://gen_user:nb7pNMZs059Cv*@e3bfa5f723e3d18210991d2d.twc1.net:5432/default_db?sslmode=require"
+DATABASE_URL = psql 'postgresql://gen_user:nb7pNMZs059Cv*@103.88.242.52:5432/default_db'
 
 # Создаем пул соединений
 db_pool = ConnectionPool(DATABASE_URL, min_size=1, max_size=10)
