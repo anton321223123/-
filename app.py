@@ -13,6 +13,9 @@ import psycopg
 from psycopg.rows import dict_row
 
 app = Flask(__name__)
+print("=" * 60)
+print("✅ ПРИЛОЖЕНИЕ ZETTA УСПЕШНО ЗАГРУЖЕНО")
+print("=" * 60)
 app.secret_key = 'secret_key_for_zetta_12345_secure_2026'
 app.config['UPLOAD_FOLDER'] = 'static/uploads'
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
