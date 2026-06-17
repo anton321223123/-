@@ -1,821 +1,314 @@
-import os
+from flask import Flask, render_template_string, request, jsonify, session, redirect, url_for
 import json
-import random
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime, timedelta
-from functools import wraps
-from flask import Flask, render_template_string, request, jsonify, session, redirect, url_for
+import random
+import os
 from werkzeug.utils import secure_filename
-import psycopg2
-from psycopg2.extras import RealDictCursor
-from psycopg2.pool import SimpleConnectionPool
+from functools import wraps
 
 app = Flask(__name__)
-app.secret_key = 'secret_key_for_zetta_12345_secure_2026'
+app.secret_key = 'secret_key_for_zetta_12345'
 app.config['UPLOAD_FOLDER'] = 'static/uploads'
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 
-# Создаем папку для загрузокк
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
-# Конфигурация PostgreSQL
-DATABASE_URL = "postgresql://gen_user:nb7pNMZs059Cv*@e3bfa5f723e3d18210991d2d.twc1.net:5432/default_db?sslmode=require"
-
-# Создаем пул соединений
-db_pool = SimpleConnectionPool(
-    minconn=1,
-    maxconn=10,
-    dsn=DATABASE_URL
-)
-
-
-def get_db_connection():
-    """Получить соединение с базой данных из пула"""
-    return db_pool.getconn()
+REVIEWS_FILE = 'reviews.json'
+USERS_FILE = 'users.json'
+ORDERS_FILE = 'orders.json'
+VERIFICATION_CODES_FILE = 'verification_codes.json'
+PASSWORD_RESET_FILE = 'password_reset.json'
+USED_PROMOCODES_FILE = 'used_promocodes.json'
+PRODUCTS_FILE = 'products.json'
+NEWS_FILE = 'news.json'
+PROMOCODES_FILE = 'promocodes_list.json'
+BANNED_USERS_FILE = 'banned_users.json'
+CHAT_MESSAGES_FILE = 'chat_messages.json'
+VLOG_FILE = 'vlog.json'
 
 
-def return_db_connection(conn):
-    """Вернуть соединение обратно в пул"""
-    db_pool.putconn(conn)
+def load_reviews():
+    if os.path.exists(REVIEWS_FILE):
+        with open(REVIEWS_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    return []
 
 
-def init_db():
-    """Инициализация базы данных: создание всех необходимых таблиц"""
-    conn = get_db_connection()
-    cur = conn.cursor()
-
-    # Таблица пользователей
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-            email VARCHAR(255) PRIMARY KEY,
-            password VARCHAR(255) NOT NULL,
-            full_name VARCHAR(255),
-            phone VARCHAR(50),
-            registered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            profile_complete BOOLEAN DEFAULT FALSE,
-            is_admin BOOLEAN DEFAULT FALSE,
-            personal_discount_type VARCHAR(20),
-            personal_discount_value INTEGER
-        )
-    """)
-
-    # Таблица отзывов
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS reviews (
-            id SERIAL PRIMARY KEY,
-            name VARCHAR(255) NOT NULL,
-            rating INTEGER NOT NULL,
-            text TEXT NOT NULL,
-            date VARCHAR(50) NOT NULL
-        )
-    """)
-
-    # Таблица заказов
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS orders (
-            id SERIAL PRIMARY KEY,
-            order_number VARCHAR(50) NOT NULL,
-            user_email VARCHAR(255),
-            order_data JSONB NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-
-    # Таблица продуктов
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS products (
-            id SERIAL PRIMARY KEY,
-            name VARCHAR(255) NOT NULL,
-            price INTEGER NOT NULL,
-            sale_price INTEGER,
-            discount_percent INTEGER DEFAULT 0,
-            description TEXT,
-            image VARCHAR(500),
-            category VARCHAR(100) DEFAULT 'services'
-        )
-    """)
-
-    # Таблица новостей
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS news (
-            id SERIAL PRIMARY KEY,
-            date VARCHAR(50) NOT NULL,
-            title VARCHAR(255) NOT NULL,
-            text TEXT NOT NULL,
-            fullText TEXT,
-            image VARCHAR(500)
-        )
-    """)
-
-    # Таблица промокодов
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS promocodes (
-            code VARCHAR(50) PRIMARY KEY,
-            discount INTEGER NOT NULL,
-            type VARCHAR(20) NOT NULL,
-            active BOOLEAN DEFAULT TRUE
-        )
-    """)
-
-    # Таблица использованных промокодов
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS used_promocodes (
-            id SERIAL PRIMARY KEY,
-            user_email VARCHAR(255) NOT NULL,
-            promo_code VARCHAR(50) NOT NULL,
-            order_number VARCHAR(50),
-            used_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-
-    # Таблица забаненных пользователей
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS banned_users (
-            email VARCHAR(255) PRIMARY KEY,
-            banned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            ban_until TIMESTAMP,
-            duration_minutes INTEGER,
-            reason TEXT,
-            message TEXT
-        )
-    """)
-
-    # Таблица верификационных кодов
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS verification_codes (
-            email VARCHAR(255) PRIMARY KEY,
-            code VARCHAR(10) NOT NULL,
-            expires_at DOUBLE PRECISION NOT NULL,
-            full_name VARCHAR(255),
-            phone VARCHAR(50),
-            password VARCHAR(255)
-        )
-    """)
-
-    # Таблица кодов сброса пароля
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS password_reset_codes (
-            email VARCHAR(255) PRIMARY KEY,
-            code VARCHAR(10) NOT NULL,
-            expires_at DOUBLE PRECISION NOT NULL
-        )
-    """)
-
-    # Таблица влога
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS vlog (
-            id INTEGER PRIMARY KEY DEFAULT 1,
-            text TEXT NOT NULL
-        )
-    """)
-
-    # Таблица сообщений чата
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS chat_messages (
-            id SERIAL PRIMARY KEY,
-            user_email VARCHAR(255) NOT NULL,
-            message TEXT,
-            type VARCHAR(20),
-            read BOOLEAN DEFAULT FALSE,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-
-    conn.commit()
-
-    # Добавляем администратора, если его нет
-    cur.execute("SELECT * FROM users WHERE email = %s", ('admin@zetta.ru',))
-    if not cur.fetchone():
-        cur.execute("""
-            INSERT INTO users (email, password, full_name, phone, profile_complete, is_admin)
-            VALUES (%s, %s, %s, %s, %s, %s)
-        """, ('admin@zetta.ru', 'admin123', 'Администратор Zetta', '+7 (999) 999-99-99', True, True))
-
-    # Добавляем дефолтные продукты, если их нет
-    cur.execute("SELECT COUNT(*) FROM products")
-    if cur.fetchone()[0] == 0:
-        default_products = [
-            (1, '💻 Сборка ПК "Игровой Флагман"', 89990, 79990, 11,
-             'Сборка игрового компьютера с установкой Windows и драйверов. Intel i7, RTX 4060, 32GB RAM, 1TB SSD.',
-             '/static/uploads/gaming_pc.jpg', 'pc_build'),
-            (2, '🔧 Услуга: Настройка ПК + Антивирус', 2990, 1990, 33,
-             'Профессиональная настройка операционной системы, установка антивируса, оптимизация реестра, удаление мусора.',
-             '/static/uploads/pc_setup.jpg', 'services'),
-            (3, '🌐 Сайт-визитка под ключ', 14990, 9990, 33,
-             'Создание современного сайта-визитки с адаптивным дизайном, формой обратной связи и базовой SEO-оптимизацией.',
-             '/static/uploads/website.jpg', 'websites'),
-            (4, '🎮 Компьютер "Стандарт" собранный', 59990, None, 0,
-             'Готовый системный блок для офиса и дома. Intel i5, 16GB RAM, 512GB SSD, Windows 11 установлена.',
-             '/static/uploads/standard_pc.jpg', 'computers'),
-            (5, '🛠️ Процессор Intel Core i7-13700K', 39990, 34990, 12,
-             'Новый процессор в оригинальной упаковке. Установка и настройка в подарок при покупке сборки ПК.',
-             '/static/uploads/cpu.jpg', 'components'),
-            (6, '🛠️ Видеокарта RTX 4070 Ti', 79990, None, 0,
-             'Мощная видеокарта для игр и работы. Гарантия 3 года. Установка при покупке сборки - бесплатно.',
-             '/static/uploads/gpu.jpg', 'components'),
-            (7, '🔧 Обслуживание ПК на месяц', 4990, 3990, 20,
-             'Абонемент на обслуживание компьютера: удалённая помощь, диагностика, настройка ПО, установка обновлений.',
-             '/static/uploads/service.jpg', 'services'),
-            (8, '🌐 Интернет-магазин под ключ', 49990, 39990, 20,
-             'Полноценный интернет-магазин с корзиной, личным кабинетом, интеграцией с платежными системами.',
-             '/static/uploads/ecommerce.jpg', 'websites'),
-        ]
-        for p in default_products:
-            cur.execute("""
-                INSERT INTO products (id, name, price, sale_price, discount_percent, description, image, category)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT (id) DO NOTHING
-            """, p)
-
-    # Добавляем дефолтные новости
-    cur.execute("SELECT COUNT(*) FROM news")
-    if cur.fetchone()[0] == 0:
-        default_news = [
-            (1, '01.06.2026', '🔥 Zetta запускает летнюю распродажу 🔥', 'Скидки до 50% на сборку ПК и создание сайтов!',
-             'Компания Zetta объявляет о грандиозной летней распродаже! Скидки достигают 50% на сборку игровых компьютеров, создание сайтов и IT-обслуживание. Торопитесь, предложение ограничено!',
-             '/static/uploads/sale.jpg'),
-            (2, '28.05.2026', 'Новая услуга - Корпоративное обслуживание',
-             'Абонентское обслуживание компьютеров для бизнеса',
-             'Zetta запускает услугу корпоративного обслуживания! Полный цикл IT-поддержки для компаний: обслуживание ПК, серверов, настройка сети и техническая поддержка сотрудников.',
-             '/static/uploads/business.jpg'),
-        ]
-        for n in default_news:
-            cur.execute("""
-                INSERT INTO news (id, date, title, text, fullText, image)
-                VALUES (%s, %s, %s, %s, %s, %s)
-                ON CONFLICT (id) DO NOTHING
-            """, n)
-
-    # Добавляем дефолтные промокоды
-    cur.execute("SELECT COUNT(*) FROM promocodes")
-    if cur.fetchone()[0] == 0:
-        default_promocodes = [
-            ('ZETTA10', 10, 'percent', True),
-            ('ZETTA20', 20, 'percent', True),
-            ('ZETTA1000', 1000, 'fixed', True),
-            ('ZETTA15', 15, 'percent', True),
-        ]
-        for p in default_promocodes:
-            cur.execute("""
-                INSERT INTO promocodes (code, discount, type, active)
-                VALUES (%s, %s, %s, %s)
-                ON CONFLICT (code) DO NOTHING
-            """, p)
-
-    # Добавляем дефолтный влог
-    cur.execute("SELECT COUNT(*) FROM vlog")
-    if cur.fetchone()[0] == 0:
-        cur.execute("""
-            INSERT INTO vlog (id, text)
-            VALUES (1, %s)
-            ON CONFLICT (id) DO NOTHING
-        """,
-                    ('Добро пожаловать в блог компании Zetta! Здесь мы будем делиться новостями о нашей работе, рассказывать о сотрудниках и анонсировать новые услуги.\n\n---\n\n✨ Если у вас есть предложения по улучшению или жалобы, нажимайте на кнопку "Предложения" внизу страницы!',))
-
-    conn.commit()
-    cur.close()
-    return_db_connection(conn)
-
-    print("=" * 60)
-    print("База данных успешно инициализирована!")
-    print("Админ аккаунт: admin@zetta.ru / admin123")
-    print("=" * 60)
+def save_reviews(reviews):
+    with open(REVIEWS_FILE, 'w', encoding='utf-8') as f:
+        json.dump(reviews, f, ensure_ascii=False, indent=2)
 
 
-# Вспомогательные функции для работы с БД
-def load_users_from_db():
-    conn = get_db_connection()
-    cur = conn.cursor(cursor_factory=RealDictCursor)
-    cur.execute(
-        "SELECT email, full_name, phone, registered_at, profile_complete, is_admin, personal_discount_type, personal_discount_value FROM users")
-    users = cur.fetchall()
-    cur.close()
-    return_db_connection(conn)
+def load_users():
+    if os.path.exists(USERS_FILE):
+        with open(USERS_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    return {}
 
-    result = {}
-    for u in users:
-        email = u['email']
-        personal_discount = None
-        if u['personal_discount_type'] and u['personal_discount_value']:
-            personal_discount = {
-                'type': u['personal_discount_type'],
-                'discount': u['personal_discount_value']
-            }
-        result[email] = {
-            'email': email,
-            'full_name': u['full_name'],
-            'phone': u['phone'],
-            'registered_at': u['registered_at'].strftime('%d.%m.%Y %H:%M:%S') if u['registered_at'] else None,
-            'profile_complete': u['profile_complete'],
-            'is_admin': u['is_admin'],
-            'personal_discount': personal_discount
+
+def save_users(users):
+    with open(USERS_FILE, 'w', encoding='utf-8') as f:
+        json.dump(users, f, ensure_ascii=False, indent=2)
+
+
+def load_orders():
+    if os.path.exists(ORDERS_FILE):
+        with open(ORDERS_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    return {}
+
+
+def save_orders(orders):
+    with open(ORDERS_FILE, 'w', encoding='utf-8') as f:
+        json.dump(orders, f, ensure_ascii=False, indent=2)
+
+
+def load_verification_codes():
+    if os.path.exists(VERIFICATION_CODES_FILE):
+        with open(VERIFICATION_CODES_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    return {}
+
+
+def save_verification_codes(codes):
+    with open(VERIFICATION_CODES_FILE, 'w', encoding='utf-8') as f:
+        json.dump(codes, f, ensure_ascii=False, indent=2)
+
+
+def load_password_reset_codes():
+    if os.path.exists(PASSWORD_RESET_FILE):
+        with open(PASSWORD_RESET_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    return {}
+
+
+def save_password_reset_codes(codes):
+    with open(PASSWORD_RESET_FILE, 'w', encoding='utf-8') as f:
+        json.dump(codes, f, ensure_ascii=False, indent=2)
+
+
+def load_used_promocodes():
+    if os.path.exists(USED_PROMOCODES_FILE):
+        with open(USED_PROMOCODES_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    return {}
+
+
+def save_used_promocodes(used):
+    with open(USED_PROMOCODES_FILE, 'w', encoding='utf-8') as f:
+        json.dump(used, f, ensure_ascii=False, indent=2)
+
+
+def load_banned_users():
+    if os.path.exists(BANNED_USERS_FILE):
+        with open(BANNED_USERS_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    return {}
+
+
+def save_banned_users(banned):
+    with open(BANNED_USERS_FILE, 'w', encoding='utf-8') as f:
+        json.dump(banned, f, ensure_ascii=False, indent=2)
+
+
+def load_chat_messages():
+    if os.path.exists(CHAT_MESSAGES_FILE):
+        with open(CHAT_MESSAGES_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    return {}
+
+
+def save_chat_messages(messages):
+    with open(CHAT_MESSAGES_FILE, 'w', encoding='utf-8') as f:
+        json.dump(messages, f, ensure_ascii=False, indent=2)
+
+
+def load_vlog():
+    if os.path.exists(VLOG_FILE):
+        with open(VLOG_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    return {
+        'text': 'Добро пожаловать в блог компании Zetta! Здесь мы будем делиться новостями о нашей работе, рассказывать о сотрудниках и анонсировать новые услуги.\n\n---\n\n✨ Если у вас есть предложения по улучшению или жалобы, нажимайте на кнопку "Предложения" внизу страницы!'}
+
+
+def save_vlog(vlog):
+    with open(VLOG_FILE, 'w', encoding='utf-8') as f:
+        json.dump(vlog, f, ensure_ascii=False, indent=2)
+
+
+def is_user_banned(email):
+    banned_users = load_banned_users()
+    email_lower = email.lower()
+    if email_lower in banned_users:
+        ban_until = banned_users[email_lower].get('ban_until')
+        reason = banned_users[email_lower].get('reason', 'Нарушение правил')
+        message = banned_users[email_lower].get('message', 'Обратитесь к администратору')
+        if ban_until:
+            ban_until_time = datetime.fromisoformat(ban_until)
+            if datetime.now() < ban_until_time:
+                return True, ban_until_time.strftime('%d.%m.%Y %H:%M:%S'), reason, message
+            else:
+                del banned_users[email_lower]
+                save_banned_users(banned_users)
+    return False, None, None, None
+
+
+def get_ban_info(email):
+    banned_users = load_banned_users()
+    email_lower = email.lower()
+    if email_lower in banned_users:
+        ban_until = banned_users[email_lower].get('ban_until')
+        reason = banned_users[email_lower].get('reason', 'Нарушение правил')
+        message = banned_users[email_lower].get('message', 'Обратитесь к администратору')
+        if ban_until:
+            ban_until_time = datetime.fromisoformat(ban_until)
+            if datetime.now() < ban_until_time:
+                return {
+                    'ban_until': ban_until_time.strftime('%d.%m.%Y %H:%M:%S'),
+                    'reason': reason,
+                    'message': message
+                }
+    return None
+
+
+def get_user_unread_count(email):
+    chats = load_chat_messages()
+    email_lower = email.lower()
+    if email_lower in chats:
+        unread = 0
+        for msg in chats[email_lower]:
+            if not msg.get('read', False) and msg.get('type') == 'admin':
+                unread += 1
+        return unread
+    return 0
+
+
+def mark_chat_read(email):
+    chats = load_chat_messages()
+    email_lower = email.lower()
+    if email_lower in chats:
+        for msg in chats[email_lower]:
+            if msg.get('type') == 'admin':
+                msg['read'] = True
+        save_chat_messages(chats)
+
+
+def load_products():
+    if os.path.exists(PRODUCTS_FILE):
+        with open(PRODUCTS_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    default_products = [
+        {'id': 1, 'name': '💻 Сборка ПК "Игровой Флагман"', 'price': 89990, 'sale_price': 79990, 'discount_percent': 11,
+         'description': 'Сборка игрового компьютера с установкой Windows и драйверов. Intel i7, RTX 4060, 32GB RAM, 1TB SSD.',
+         'image': '/static/uploads/gaming_pc.jpg', 'category': 'pc_build'},
+        {'id': 2, 'name': '🔧 Услуга: Настройка ПК + Антивирус', 'price': 2990, 'sale_price': 1990,
+         'discount_percent': 33,
+         'description': 'Профессиональная настройка операционной системы, установка антивируса, оптимизация реестра, удаление мусора.',
+         'image': '/static/uploads/pc_setup.jpg', 'category': 'services'},
+        {'id': 3, 'name': '🌐 Сайт-визитка под ключ', 'price': 14990, 'sale_price': 9990, 'discount_percent': 33,
+         'description': 'Создание современного сайта-визитки с адаптивным дизайном, формой обратной связи и базовой SEO-оптимизацией.',
+         'image': '/static/uploads/website.jpg', 'category': 'websites'},
+        {'id': 4, 'name': '🎮 Компьютер "Стандарт" собранный', 'price': 59990, 'sale_price': None, 'discount_percent': 0,
+         'description': 'Готовый системный блок для офиса и дома. Intel i5, 16GB RAM, 512GB SSD, Windows 11 установлена.',
+         'image': '/static/uploads/standard_pc.jpg', 'category': 'computers'},
+        {'id': 5, 'name': '🛠️ Процессор Intel Core i7-13700K', 'price': 39990, 'sale_price': 34990,
+         'discount_percent': 12,
+         'description': 'Новый процессор в оригинальной упаковке. Установка и настройка в подарок при покупке сборки ПК.',
+         'image': '/static/uploads/cpu.jpg', 'category': 'components'},
+        {'id': 6, 'name': '🛠️ Видеокарта RTX 4070 Ti', 'price': 79990, 'sale_price': None, 'discount_percent': 0,
+         'description': 'Мощная видеокарта для игр и работы. Гарантия 3 года. Установка при покупке сборки - бесплатно.',
+         'image': '/static/uploads/gpu.jpg', 'category': 'components'},
+        {'id': 7, 'name': '🔧 Обслуживание ПК на месяц', 'price': 4990, 'sale_price': 3990, 'discount_percent': 20,
+         'description': 'Абонемент на обслуживание компьютера: удалённая помощь, диагностика, настройка ПО, установка обновлений.',
+         'image': '/static/uploads/service.jpg', 'category': 'services'},
+        {'id': 8, 'name': '🌐 Интернет-магазин под ключ', 'price': 49990, 'sale_price': 39990, 'discount_percent': 20,
+         'description': 'Полноценный интернет-магазин с корзиной, личным кабинетом, интеграцией с платежными системами.',
+         'image': '/static/uploads/ecommerce.jpg', 'category': 'websites'},
+    ]
+    save_products(default_products)
+    return default_products
+
+
+def save_products(products):
+    with open(PRODUCTS_FILE, 'w', encoding='utf-8') as f:
+        json.dump(products, f, ensure_ascii=False, indent=2)
+
+
+def load_news():
+    if os.path.exists(NEWS_FILE):
+        with open(NEWS_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    default_news = [
+        {
+            'id': 1,
+            'date': '01.06.2026',
+            'title': '🔥 Zetta запускает летнюю распродажу 🔥',
+            'text': 'Скидки до 50% на сборку ПК и создание сайтов!',
+            'fullText': 'Компания Zetta объявляет о грандиозной летней распродаже! Скидки достигают 50% на сборку игровых компьютеров, создание сайтов и IT-обслуживание. Торопитесь, предложение ограничено!',
+            'image': '/static/uploads/sale.jpg'
+        },
+        {
+            'id': 2,
+            'date': '28.05.2026',
+            'title': 'Новая услуга - Корпоративное обслуживание',
+            'text': 'Абонентское обслуживание компьютеров для бизнеса',
+            'fullText': 'Zetta запускает услугу корпоративного обслуживания! Полный цикл IT-поддержки для компаний: обслуживание ПК, серверов, настройка сети и техническая поддержка сотрудников.',
+            'image': '/static/uploads/business.jpg'
         }
-    return result
+    ]
+    save_news(default_news)
+    return default_news
 
 
-def get_user_from_db(email):
-    conn = get_db_connection()
-    cur = conn.cursor(cursor_factory=RealDictCursor)
-    cur.execute("SELECT * FROM users WHERE email = %s", (email.lower(),))
-    user = cur.fetchone()
-    cur.close()
-    return_db_connection(conn)
-    return user
+def save_news(news):
+    with open(NEWS_FILE, 'w', encoding='utf-8') as f:
+        json.dump(news, f, ensure_ascii=False, indent=2)
 
 
-def save_user_to_db(email, password, full_name, phone, profile_complete=False, is_admin=False):
-    conn = get_db_connection()
-    cur = conn.cursor()
-    cur.execute("""
-        INSERT INTO users (email, password, full_name, phone, profile_complete, is_admin, registered_at)
-        VALUES (%s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
-        ON CONFLICT (email) DO UPDATE SET
-            password = EXCLUDED.password,
-            full_name = EXCLUDED.full_name,
-            phone = EXCLUDED.phone,
-            profile_complete = EXCLUDED.profile_complete,
-            is_admin = EXCLUDED.is_admin
-    """, (email.lower(), password, full_name, phone, profile_complete, is_admin))
-    conn.commit()
-    cur.close()
-    return_db_connection(conn)
+def load_promocodes_list():
+    if os.path.exists(PROMOCODES_FILE):
+        with open(PROMOCODES_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    default_promocodes = {
+        'ZETTA10': {'discount': 10, 'type': 'percent', 'active': True},
+        'ZETTA20': {'discount': 20, 'type': 'percent', 'active': True},
+        'ZETTA1000': {'discount': 1000, 'type': 'fixed', 'active': True},
+        'ZETTA15': {'discount': 15, 'type': 'percent', 'active': True},
+    }
+    save_promocodes_list(default_promocodes)
+    return default_promocodes
 
 
-def update_user_profile_db(email, full_name, phone):
-    conn = get_db_connection()
-    cur = conn.cursor()
-    cur.execute("""
-        UPDATE users 
-        SET full_name = %s, phone = %s, profile_complete = TRUE
-        WHERE email = %s
-    """, (full_name, phone, email.lower()))
-    conn.commit()
-    cur.close()
-    return_db_connection(conn)
+def save_promocodes_list(promocodes):
+    with open(PROMOCODES_FILE, 'w', encoding='utf-8') as f:
+        json.dump(promocodes, f, ensure_ascii=False, indent=2)
 
 
-def update_user_admin_status(email, is_admin):
-    conn = get_db_connection()
-    cur = conn.cursor()
-    cur.execute("UPDATE users SET is_admin = %s WHERE email = %s", (is_admin, email.lower()))
-    conn.commit()
-    cur.close()
-    return_db_connection(conn)
+def generate_verification_code():
+    return str(random.randint(100000, 999999))
 
 
-def set_personal_discount_db(email, discount_type, discount_value):
-    conn = get_db_connection()
-    cur = conn.cursor()
-    cur.execute("""
-        UPDATE users 
-        SET personal_discount_type = %s, personal_discount_value = %s
-        WHERE email = %s
-    """, (discount_type, discount_value, email.lower()))
-    conn.commit()
-    cur.close()
-    return_db_connection(conn)
+def is_promocode_used(email, promo_code):
+    used = load_used_promocodes()
+    key = f"{email}_{promo_code}"
+    return key in used
 
 
-def remove_personal_discount_db(email):
-    conn = get_db_connection()
-    cur = conn.cursor()
-    cur.execute("""
-        UPDATE users 
-        SET personal_discount_type = NULL, personal_discount_value = NULL
-        WHERE email = %s
-    """, (email.lower(),))
-    conn.commit()
-    cur.close()
-    return_db_connection(conn)
+def mark_promocode_used(email, promo_code, order_number):
+    used = load_used_promocodes()
+    key = f"{email}_{promo_code}"
+    used[key] = {
+        'email': email,
+        'promo_code': promo_code,
+        'order_number': order_number,
+        'used_at': datetime.now().strftime('%d.%m.%Y %H:%M:%S')
+    }
+    save_used_promocodes(used)
 
 
-def load_reviews_from_db():
-    conn = get_db_connection()
-    cur = conn.cursor(cursor_factory=RealDictCursor)
-    cur.execute("SELECT id, name, rating, text, date FROM reviews ORDER BY id DESC")
-    reviews = cur.fetchall()
-    cur.close()
-    return_db_connection(conn)
-    return reviews
-
-
-def add_review_to_db(name, rating, text, date):
-    conn = get_db_connection()
-    cur = conn.cursor()
-    cur.execute("""
-        INSERT INTO reviews (name, rating, text, date)
-        VALUES (%s, %s, %s, %s)
-    """, (name, rating, text, date))
-    conn.commit()
-    cur.close()
-    return_db_connection(conn)
-
-
-def delete_review_from_db(review_id):
-    conn = get_db_connection()
-    cur = conn.cursor()
-    cur.execute("DELETE FROM reviews WHERE id = %s", (review_id,))
-    conn.commit()
-    cur.close()
-    return_db_connection(conn)
-
-
-def load_products_from_db():
-    conn = get_db_connection()
-    cur = conn.cursor(cursor_factory=RealDictCursor)
-    cur.execute("SELECT * FROM products ORDER BY id")
-    products = cur.fetchall()
-    cur.close()
-    return_db_connection(conn)
-    return products
-
-
-def add_product_to_db(name, price, sale_price, discount_percent, description, image, category):
-    conn = get_db_connection()
-    cur = conn.cursor()
-    cur.execute("""
-        INSERT INTO products (name, price, sale_price, discount_percent, description, image, category)
-        VALUES (%s, %s, %s, %s, %s, %s, %s)
-    """, (name, price, sale_price, discount_percent, description, image, category))
-    conn.commit()
-    cur.close()
-    return_db_connection(conn)
-
-
-def update_product_in_db(product_id, name, price, sale_price, discount_percent, description, category):
-    conn = get_db_connection()
-    cur = conn.cursor()
-    cur.execute("""
-        UPDATE products 
-        SET name = %s, price = %s, sale_price = %s, discount_percent = %s, description = %s, category = %s
-        WHERE id = %s
-    """, (name, price, sale_price, discount_percent, description, category, product_id))
-    conn.commit()
-    cur.close()
-    return_db_connection(conn)
-
-
-def delete_product_from_db(product_id):
-    conn = get_db_connection()
-    cur = conn.cursor()
-    cur.execute("DELETE FROM products WHERE id = %s", (product_id,))
-    conn.commit()
-    cur.close()
-    return_db_connection(conn)
-
-
-def load_news_from_db():
-    conn = get_db_connection()
-    cur = conn.cursor(cursor_factory=RealDictCursor)
-    cur.execute("SELECT * FROM news ORDER BY id")
-    news = cur.fetchall()
-    cur.close()
-    return_db_connection(conn)
-    return news
-
-
-def add_news_to_db(date, title, text, fullText, image):
-    conn = get_db_connection()
-    cur = conn.cursor()
-    cur.execute("""
-        INSERT INTO news (date, title, text, fullText, image)
-        VALUES (%s, %s, %s, %s, %s)
-    """, (date, title, text, fullText, image))
-    conn.commit()
-    cur.close()
-    return_db_connection(conn)
-
-
-def update_news_in_db(news_id, title, text, fullText):
-    conn = get_db_connection()
-    cur = conn.cursor()
-    cur.execute("""
-        UPDATE news 
-        SET title = %s, text = %s, fullText = %s
-        WHERE id = %s
-    """, (title, text, fullText, news_id))
-    conn.commit()
-    cur.close()
-    return_db_connection(conn)
-
-
-def delete_news_from_db(news_id):
-    conn = get_db_connection()
-    cur = conn.cursor()
-    cur.execute("DELETE FROM news WHERE id = %s", (news_id,))
-    conn.commit()
-    cur.close()
-    return_db_connection(conn)
-
-
-def load_promocodes_from_db():
-    conn = get_db_connection()
-    cur = conn.cursor(cursor_factory=RealDictCursor)
-    cur.execute("SELECT * FROM promocodes")
-    promocodes = cur.fetchall()
-    cur.close()
-    return_db_connection(conn)
-    result = {}
-    for p in promocodes:
-        result[p['code']] = {
-            'discount': p['discount'],
-            'type': p['type'],
-            'active': p['active']
-        }
-    return result
-
-
-def add_promocode_to_db(code, discount, type, active=True):
-    conn = get_db_connection()
-    cur = conn.cursor()
-    cur.execute("""
-        INSERT INTO promocodes (code, discount, type, active)
-        VALUES (%s, %s, %s, %s)
-        ON CONFLICT (code) DO UPDATE SET
-            discount = EXCLUDED.discount,
-            type = EXCLUDED.type,
-            active = EXCLUDED.active
-    """, (code, discount, type, active))
-    conn.commit()
-    cur.close()
-    return_db_connection(conn)
-
-
-def toggle_promocode_in_db(code, active):
-    conn = get_db_connection()
-    cur = conn.cursor()
-    cur.execute("UPDATE promocodes SET active = %s WHERE code = %s", (active, code))
-    conn.commit()
-    cur.close()
-    return_db_connection(conn)
-
-
-def delete_promocode_from_db(code):
-    conn = get_db_connection()
-    cur = conn.cursor()
-    cur.execute("DELETE FROM promocodes WHERE code = %s", (code,))
-    conn.commit()
-    cur.close()
-    return_db_connection(conn)
-
-
-def is_promocode_used_db(user_email, promo_code):
-    conn = get_db_connection()
-    cur = conn.cursor()
-    cur.execute("SELECT * FROM used_promocodes WHERE user_email = %s AND promo_code = %s",
-                (user_email.lower(), promo_code))
-    result = cur.fetchone()
-    cur.close()
-    return_db_connection(conn)
-    return result is not None
-
-
-def mark_promocode_used_db(user_email, promo_code, order_number):
-    conn = get_db_connection()
-    cur = conn.cursor()
-    cur.execute("""
-        INSERT INTO used_promocodes (user_email, promo_code, order_number)
-        VALUES (%s, %s, %s)
-    """, (user_email.lower(), promo_code, order_number))
-    conn.commit()
-    cur.close()
-    return_db_connection(conn)
-
-
-def load_orders_from_db():
-    conn = get_db_connection()
-    cur = conn.cursor(cursor_factory=RealDictCursor)
-    cur.execute("SELECT user_email, order_data, order_number, created_at FROM orders ORDER BY created_at DESC")
-    orders = cur.fetchall()
-    cur.close()
-    return_db_connection(conn)
-    result = {}
-    for o in orders:
-        email = o['user_email']
-        if email not in result:
-            result[email] = []
-        result[email].append(o['order_data'])
-    return result
-
-
-def save_order_to_db(user_email, order_data):
-    conn = get_db_connection()
-    cur = conn.cursor()
-    cur.execute("""
-        INSERT INTO orders (user_email, order_number, order_data)
-        VALUES (%s, %s, %s)
-    """, (user_email.lower(), order_data['order_number'], json.dumps(order_data)))
-    conn.commit()
-    cur.close()
-    return_db_connection(conn)
-
-
-def get_user_orders_from_db(user_email):
-    conn = get_db_connection()
-    cur = conn.cursor(cursor_factory=RealDictCursor)
-    cur.execute("SELECT order_data FROM orders WHERE user_email = %s ORDER BY created_at DESC", (user_email.lower(),))
-    orders = cur.fetchall()
-    cur.close()
-    return_db_connection(conn)
-    return [o['order_data'] for o in orders]
-
-
-def load_banned_users_from_db():
-    conn = get_db_connection()
-    cur = conn.cursor(cursor_factory=RealDictCursor)
-    cur.execute("SELECT * FROM banned_users")
-    banned = cur.fetchall()
-    cur.close()
-    return_db_connection(conn)
-    result = {}
-    for b in banned:
-        result[b['email']] = {
-            'banned_at': b['banned_at'].isoformat(),
-            'ban_until': b['ban_until'].isoformat(),
-            'duration_minutes': b['duration_minutes'],
-            'reason': b['reason'],
-            'message': b['message']
-        }
-    return result
-
-
-def add_banned_user_to_db(email, ban_until, duration_minutes, reason, message):
-    conn = get_db_connection()
-    cur = conn.cursor()
-    cur.execute("""
-        INSERT INTO banned_users (email, ban_until, duration_minutes, reason, message)
-        VALUES (%s, %s, %s, %s, %s)
-        ON CONFLICT (email) DO UPDATE SET
-            ban_until = EXCLUDED.ban_until,
-            duration_minutes = EXCLUDED.duration_minutes,
-            reason = EXCLUDED.reason,
-            message = EXCLUDED.message
-    """, (email.lower(), ban_until, duration_minutes, reason, message))
-    conn.commit()
-    cur.close()
-    return_db_connection(conn)
-
-
-def remove_banned_user_from_db(email):
-    conn = get_db_connection()
-    cur = conn.cursor()
-    cur.execute("DELETE FROM banned_users WHERE email = %s", (email.lower(),))
-    conn.commit()
-    cur.close()
-    return_db_connection(conn)
-
-
-def get_verification_code_from_db(email):
-    conn = get_db_connection()
-    cur = conn.cursor(cursor_factory=RealDictCursor)
-    cur.execute("SELECT * FROM verification_codes WHERE email = %s", (email.lower(),))
-    result = cur.fetchone()
-    cur.close()
-    return_db_connection(conn)
-    return result
-
-
-def save_verification_code_to_db(email, code, expires_at, full_name, phone, password):
-    conn = get_db_connection()
-    cur = conn.cursor()
-    cur.execute("""
-        INSERT INTO verification_codes (email, code, expires_at, full_name, phone, password)
-        VALUES (%s, %s, %s, %s, %s, %s)
-        ON CONFLICT (email) DO UPDATE SET
-            code = EXCLUDED.code,
-            expires_at = EXCLUDED.expires_at,
-            full_name = EXCLUDED.full_name,
-            phone = EXCLUDED.phone,
-            password = EXCLUDED.password
-    """, (email.lower(), code, expires_at, full_name, phone, password))
-    conn.commit()
-    cur.close()
-    return_db_connection(conn)
-
-
-def delete_verification_code_from_db(email):
-    conn = get_db_connection()
-    cur = conn.cursor()
-    cur.execute("DELETE FROM verification_codes WHERE email = %s", (email.lower(),))
-    conn.commit()
-    cur.close()
-    return_db_connection(conn)
-
-
-def get_password_reset_code_from_db(email):
-    conn = get_db_connection()
-    cur = conn.cursor(cursor_factory=RealDictCursor)
-    cur.execute("SELECT * FROM password_reset_codes WHERE email = %s", (email.lower(),))
-    result = cur.fetchone()
-    cur.close()
-    return_db_connection(conn)
-    return result
-
-
-def save_password_reset_code_to_db(email, code, expires_at):
-    conn = get_db_connection()
-    cur = conn.cursor()
-    cur.execute("""
-        INSERT INTO password_reset_codes (email, code, expires_at)
-        VALUES (%s, %s, %s)
-        ON CONFLICT (email) DO UPDATE SET
-            code = EXCLUDED.code,
-            expires_at = EXCLUDED.expires_at
-    """, (email.lower(), code, expires_at))
-    conn.commit()
-    cur.close()
-    return_db_connection(conn)
-
-
-def delete_password_reset_code_from_db(email):
-    conn = get_db_connection()
-    cur = conn.cursor()
-    cur.execute("DELETE FROM password_reset_codes WHERE email = %s", (email.lower(),))
-    conn.commit()
-    cur.close()
-    return_db_connection(conn)
-
-
-def load_vlog_from_db():
-    conn = get_db_connection()
-    cur = conn.cursor(cursor_factory=RealDictCursor)
-    cur.execute("SELECT text FROM vlog WHERE id = 1")
-    result = cur.fetchone()
-    cur.close()
-    return_db_connection(conn)
-    if result:
-        return {'text': result['text']}
-    return {'text': 'Добро пожаловать в блог компании Zetta!'}
-
-
-def update_vlog_in_db(text):
-    conn = get_db_connection()
-    cur = conn.cursor()
-    cur.execute("UPDATE vlog SET text = %s WHERE id = 1", (text,))
-    conn.commit()
-    cur.close()
-    return_db_connection(conn)
-
-
-def add_chat_message_to_db(user_email, message, msg_type):
-    conn = get_db_connection()
-    cur = conn.cursor()
-    cur.execute("""
-        INSERT INTO chat_messages (user_email, message, type)
-        VALUES (%s, %s, %s)
-    """, (user_email.lower(), message, msg_type))
-    conn.commit()
-    cur.close()
-    return_db_connection(conn)
-
-
-def get_chat_messages_from_db(user_email):
-    conn = get_db_connection()
-    cur = conn.cursor(cursor_factory=RealDictCursor)
-    cur.execute("SELECT * FROM chat_messages WHERE user_email = %s ORDER BY created_at", (user_email.lower(),))
-    messages = cur.fetchall()
-    cur.close()
-    return_db_connection(conn)
-    return [{'type': m['type'], 'message': m['message'], 'read': m['read']} for m in messages]
-
-
-def mark_chat_messages_read_db(user_email):
-    conn = get_db_connection()
-    cur = conn.cursor()
-    cur.execute("UPDATE chat_messages SET read = TRUE WHERE user_email = %s AND type = 'admin'", (user_email.lower(),))
-    conn.commit()
-    cur.close()
-    return_db_connection(conn)
-
-
-def get_unread_count_db(user_email):
-    conn = get_db_connection()
-    cur = conn.cursor()
-    cur.execute("SELECT COUNT(*) FROM chat_messages WHERE user_email = %s AND type = 'admin' AND read = FALSE",
-                (user_email.lower(),))
-    count = cur.fetchone()[0]
-    cur.close()
-    return_db_connection(conn)
-    return count
-
-
-EMAIL_CONFIG = {
-    'smtp_server': 'smtp.mail.ru',
-    'smtp_port': 587,
-    'email': 'vaincode@mail.ru',
-    'password': '7lvM92oEvTGdieqUCwGM'
-}
-
-OFFICE_COORDINATES = {
-    'lat': 53.3543,
-    'lon': 83.7493,
-    'address': 'г. Барнаул, ул. Юрина, 182/7'
-}
-
-
-# Функции отправки email
 def send_verification_email(email, code, type='registration'):
     try:
         msg = MIMEMultipart()
@@ -880,6 +373,7 @@ def send_verification_email(email, code, type='registration'):
         server.login(EMAIL_CONFIG['email'], EMAIL_CONFIG['password'])
         server.send_message(msg)
         server.quit()
+
         return True
     except Exception as e:
         print(f"Ошибка отправки email: {e}")
@@ -937,14 +431,16 @@ def send_receipt_email(order_data):
 
         items_html = ''
         for item in order_data['items']:
+            discount_style = 'color:#e74c3c; font-weight:bold;' if item.get('sale_price') and item['price'] != item.get(
+                'sale_price') else ''
             discount_span = '<span style="color:#e74c3c; font-size:0.8rem;">🔥 Скидка!</span>' if item.get(
-                'price') != item.get('original_price', item['price']) else ''
+                'sale_price') and item['price'] != item.get('sale_price') else ''
             items_html += f'''
             <tr>
-                <td>{item["name"]} {discount_span}</td>
+                <td style="{discount_style}">{item["name"]} {discount_span}</td>
                 <td>{item["quantity"]}</td>
-                <td>{item["price"]:,} ₽</td>
-                <td>{item["total"]:,} ₽</td>
+                <td>{item["price"]:,} ₽</td
+                <td>{item["total"]:,} ₽</td
             </tr>
             '''
 
@@ -1033,13 +529,667 @@ def send_receipt_email(order_data):
         server.login(EMAIL_CONFIG['email'], EMAIL_CONFIG['password'])
         server.send_message(msg)
         server.quit()
+
         return True
     except Exception as e:
         print(f"Ошибка отправки email: {e}")
         return False
 
 
-def send_feedback_email(user_name, user_email, user_phone, message):
+def save_temp_registration(email, data):
+    temp_registrations = load_verification_codes()
+    temp_registrations[email] = {
+        'code': data['code'],
+        'expires_at': data['expires_at'],
+        'full_name': data['full_name'],
+        'phone': data['phone'],
+        'password': data['password']
+    }
+    save_verification_codes(temp_registrations)
+
+
+def get_temp_registration(email):
+    temp_registrations = load_verification_codes()
+    return temp_registrations.get(email)
+
+
+def delete_temp_registration(email):
+    temp_registrations = load_verification_codes()
+    if email in temp_registrations:
+        del temp_registrations[email]
+        save_verification_codes(temp_registrations)
+
+
+def save_password_reset(email, code, expires_at):
+    reset_codes = load_password_reset_codes()
+    reset_codes[email] = {
+        'code': code,
+        'expires_at': expires_at
+    }
+    save_password_reset_codes(reset_codes)
+
+
+def get_password_reset(email):
+    reset_codes = load_password_reset_codes()
+    return reset_codes.get(email)
+
+
+def delete_password_reset(email):
+    reset_codes = load_password_reset_codes()
+    if email in reset_codes:
+        del reset_codes[email]
+        save_password_reset_codes(reset_codes)
+
+
+def register_user(email, password, full_name, phone):
+    users = load_users()
+    email_lower = email.lower()
+    if email_lower in users:
+        return False, "Пользователь с таким email уже существует"
+
+    users[email_lower] = {
+        'email': email_lower,
+        'password': password,
+        'full_name': full_name,
+        'phone': phone,
+        'registered_at': datetime.now().strftime('%d.%m.%Y %H:%M:%S'),
+        'addresses': [],
+        'profile_complete': True,
+        'is_admin': email_lower == 'admin@zetta.ru',
+        'personal_discount': None
+    }
+    save_users(users)
+    return True, "Регистрация успешна"
+
+
+def update_user_profile(email, full_name, phone):
+    users = load_users()
+    email_lower = email.lower()
+    if email_lower in users:
+        users[email_lower]['full_name'] = full_name
+        users[email_lower]['phone'] = phone
+        users[email_lower]['profile_complete'] = True
+        save_users(users)
+        return True
+    return False
+
+
+def is_profile_complete(email):
+    users = load_users()
+    email_lower = email.lower()
+    if email_lower in users:
+        user = users[email_lower]
+        return user.get('profile_complete', False) and user.get('full_name') and user.get('phone')
+    return False
+
+
+def is_admin(email):
+    users = load_users()
+    email_lower = email.lower()
+    if email_lower in users:
+        return users[email_lower].get('is_admin', False)
+    return False
+
+
+def login_user(email, password):
+    users = load_users()
+    email_lower = email.lower()
+
+    is_banned, ban_until, ban_reason, ban_message = is_user_banned(email_lower)
+    if is_banned:
+        return False, f"Ваш аккаунт забанен до {ban_until}. Причина: {ban_reason}. Сообщение от администратора: {ban_message}"
+
+    if email_lower in users and users[email_lower]['password'] == password:
+        session['user_email'] = email_lower
+        session['user_name'] = users[email_lower]['full_name']
+        session['is_admin'] = users[email_lower].get('is_admin', False)
+        return True, "Вход выполнен"
+    return False, "Неверный email или пароль"
+
+
+def save_order_to_history(user_email, order_data):
+    orders = load_orders()
+    email_lower = user_email.lower()
+    if email_lower not in orders:
+        orders[email_lower] = []
+    orders[email_lower].append(order_data)
+    save_orders(orders)
+
+
+def get_user_orders(user_email):
+    orders = load_orders()
+    email_lower = user_email.lower()
+    return orders.get(email_lower, [])
+
+
+def get_daily_random_reviews():
+    reviews = load_reviews()
+    if len(reviews) == 0:
+        return []
+
+    today_seed = int(datetime.now().strftime('%Y%m%d'))
+    random.seed(today_seed)
+
+    shuffled = reviews.copy()
+    random.shuffle(shuffled)
+    return shuffled[:3]
+
+
+def calculate_distance(address):
+    address_lower = address.lower()
+
+    if 'барнаул' in address_lower:
+        distance = random.randint(1, 30)
+    elif 'новосибирск' in address_lower:
+        distance = random.randint(200, 250)
+    elif 'москва' in address_lower:
+        distance = random.randint(3000, 3500)
+    elif 'спб' in address_lower or 'санкт-петербург' in address_lower:
+        distance = random.randint(3500, 4000)
+    elif 'томск' in address_lower:
+        distance = random.randint(400, 450)
+    elif 'кемерово' in address_lower:
+        distance = random.randint(250, 300)
+    elif 'новокузнецк' in address_lower:
+        distance = random.randint(350, 400)
+    elif 'бийск' in address_lower:
+        distance = random.randint(150, 180)
+    elif 'рубцовск' in address_lower:
+        distance = random.randint(250, 280)
+    else:
+        distance = random.randint(100, 2000)
+
+    return distance
+
+
+def calculate_delivery_date(distance_km):
+    if distance_km <= 50:
+        days = 3
+        period_text = "3 дня"
+    elif distance_km <= 100:
+        days = 7
+        period_text = "7 дней"
+    else:
+        days = 14
+        period_text = "14 дней (2 недели)"
+
+    delivery_date = (datetime.now() + timedelta(days=days)).strftime('%d.%m.%Y')
+    return delivery_date, period_text
+
+
+def get_product_price(product):
+    if product.get('sale_price') and product['sale_price'] > 0 and product['sale_price'] < product['price']:
+        return product['sale_price']
+    return product['price']
+
+
+EMAIL_CONFIG = {
+    'smtp_server': 'smtp.mail.ru',
+    'smtp_port': 587,
+    'email': 'vaincode@mail.ru',
+    'password': '7lvM92oEvTGdieqUCwGM'
+}
+
+OFFICE_COORDINATES = {
+    'lat': 53.3543,
+    'lon': 83.7493,
+    'address': 'г. Барнаул, ул. Юрина, 182/7'
+}
+
+
+# ИНИЦИАЛИЗАЦИЯ АДМИНА ПРИ ПЕРВОМ ЗАПРОСЕ
+def init_admin_on_first_request():
+    users = load_users()
+    admin_email = 'admin@zetta.ru'
+    admin_exists = False
+
+    for email, user_data in users.items():
+        if user_data.get('is_admin', False):
+            admin_exists = True
+            break
+
+    if not admin_exists:
+        users[admin_email] = {
+            'email': admin_email,
+            'password': 'admin123',
+            'full_name': 'Администратор Zetta',
+            'phone': '+7 (999) 999-99-99',
+            'registered_at': datetime.now().strftime('%d.%m.%Y %H:%M:%S'),
+            'addresses': [],
+            'profile_complete': True,
+            'is_admin': True,
+            'personal_discount': None
+        }
+        save_users(users)
+        print("=" * 50)
+        print("АДМИН ZETTA СОЗДАН:")
+        print(f"Email: {admin_email}")
+        print(f"Пароль: admin123")
+        print("=" * 50)
+
+
+# СТРАНИЦА "САЙТ НЕДОСТУПЕН" (503 ошибка)
+@app.errorhandler(503)
+def service_unavailable(e):
+    return render_template_string('''
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <title>Сайт временно недоступен</title>
+        <style>
+            * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }
+            body {
+                background: linear-gradient(135deg, #0a0a0a 0%, #1a0a0a 100%);
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                min-height: 100vh;
+                font-family: 'Segoe UI', Arial, sans-serif;
+            }
+            .error-container {
+                text-align: center;
+                animation: fadeInUp 0.8s ease-out;
+            }
+            @keyframes fadeInUp {
+                from {
+                    opacity: 0;
+                    transform: translateY(30px);
+                }
+                to {
+                    opacity: 1;
+                    transform: translateY(0);
+                }
+            }
+            @keyframes pulse {
+                0% { transform: scale(1); }
+                50% { transform: scale(1.05); }
+                100% { transform: scale(1); }
+            }
+            @keyframes shake {
+                0%, 100% { transform: translateX(0); }
+                25% { transform: translateX(-5px); }
+                75% { transform: translateX(5px); }
+            }
+            .triangle {
+                width: 0;
+                height: 0;
+                border-left: 80px solid transparent;
+                border-right: 80px solid transparent;
+                border-bottom: 140px solid #e74c3c;
+                margin: 0 auto 2rem;
+                position: relative;
+                animation: pulse 2s ease-in-out infinite;
+            }
+            .triangle::before {
+                content: "!";
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                font-size: 5rem;
+                font-weight: bold;
+                color: white;
+                text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+            }
+            .triangle:hover {
+                animation: shake 0.5s ease-in-out;
+            }
+            .error-text {
+                font-size: 2rem;
+                font-weight: 500;
+                color: #e74c3c;
+                margin-bottom: 1rem;
+                letter-spacing: 2px;
+            }
+            .error-message {
+                color: #888;
+                font-size: 1.1rem;
+                margin-bottom: 2rem;
+            }
+            .error-message span {
+                color: #27ae60;
+                font-weight: bold;
+            }
+            .logo {
+                margin-top: 2rem;
+                font-size: 1rem;
+                color: #555;
+                letter-spacing: 2px;
+            }
+            .logo span {
+                color: #27ae60;
+                font-weight: bold;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="error-container">
+            <div class="triangle"></div>
+            <div class="error-text">САЙТ ВРЕМЕННО НЕ ДОСТУПЕН</div>
+            <div class="error-message">
+                Приносим свои извинения, ведутся технические работы.<br>
+                Скоро мы вернёмся!<br><br>
+                С уважением, команда <span>ZETTA</span>
+            </div>
+            <div class="logo">
+                <span>⚡ ZETTA</span> — Профессиональная сборка ПК и IT-услуги
+            </div>
+        </div>
+    </body>
+    </html>
+    ''', 503)
+
+
+# СТРАНИЦА БАНА
+@app.route('/ban-page')
+def ban_page():
+    email = request.args.get('email', '')
+    ban_info = get_ban_info(email)
+    if ban_info:
+        return render_template_string('''
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <title>Аккаунт заблокирован</title>
+            <style>
+                * {
+                    margin: 0;
+                    padding: 0;
+                    box-sizing: border-box;
+                }
+                body {
+                    background: linear-gradient(135deg, #0a0a0a 0%, #1a0a0a 100%);
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                    min-height: 100vh;
+                    font-family: 'Segoe UI', Arial, sans-serif;
+                }
+                .ban-container {
+                    background: #1a1a1a;
+                    border: 1px solid #e74c3c;
+                    border-radius: 16px;
+                    padding: 2.5rem;
+                    max-width: 500px;
+                    margin: 20px;
+                    text-align: center;
+                    animation: fadeInUp 0.6s ease-out;
+                    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+                }
+                @keyframes fadeInUp {
+                    from {
+                        opacity: 0;
+                        transform: translateY(30px);
+                    }
+                    to {
+                        opacity: 1;
+                        transform: translateY(0);
+                    }
+                }
+                @keyframes pulse {
+                    0% { transform: scale(1); }
+                    50% { transform: scale(1.05); }
+                    100% { transform: scale(1); }
+                }
+                .ban-icon {
+                    font-size: 4rem;
+                    margin-bottom: 1rem;
+                    animation: pulse 1.5s ease-in-out infinite;
+                }
+                .ban-title {
+                    font-size: 1.8rem;
+                    font-weight: bold;
+                    color: #e74c3c;
+                    margin-bottom: 1rem;
+                }
+                .ban-subtitle {
+                    color: #888;
+                    margin-bottom: 1.5rem;
+                    font-size: 0.9rem;
+                }
+                .ban-info {
+                    background: #0f0f0f;
+                    border-radius: 12px;
+                    padding: 1.5rem;
+                    text-align: left;
+                    margin-bottom: 1.5rem;
+                    border-left: 4px solid #e74c3c;
+                }
+                .ban-info p {
+                    margin: 0.5rem 0;
+                    color: #bbb;
+                }
+                .ban-info strong {
+                    color: #27ae60;
+                }
+                .ban-reason {
+                    background: #2a1a1a;
+                    padding: 0.8rem;
+                    border-radius: 8px;
+                    margin: 0.5rem 0;
+                    color: #e74c3c;
+                    font-weight: bold;
+                }
+                .ban-message {
+                    background: #1a2a1a;
+                    padding: 0.8rem;
+                    border-radius: 8px;
+                    margin: 0.5rem 0;
+                    color: #27ae60;
+                    font-style: italic;
+                }
+                .ban-date {
+                    color: #f39c12;
+                    font-weight: bold;
+                }
+                .contact-link {
+                    color: #27ae60;
+                    text-decoration: none;
+                    font-weight: bold;
+                    transition: all 0.3s ease;
+                }
+                .contact-link:hover {
+                    text-decoration: underline;
+                    color: #229954;
+                }
+                .back-btn {
+                    background: #27ae60;
+                    color: white;
+                    border: none;
+                    padding: 0.8rem 1.5rem;
+                    border-radius: 8px;
+                    cursor: pointer;
+                    font-size: 1rem;
+                    margin-top: 1rem;
+                    transition: all 0.3s ease;
+                }
+                .back-btn:hover {
+                    background: #229954;
+                    transform: scale(1.02);
+                }
+            </style>
+        </head>
+        <body>
+            <div class="ban-container">
+                <div class="ban-icon">🚫</div>
+                <div class="ban-title">ДОСТУП ЗАБЛОКИРОВАН</div>
+                <div class="ban-subtitle">Ваш аккаунт был заблокирован администрацией</div>
+
+                <div class="ban-info">
+                    <p><strong>📅 Дата блокировки:</strong> <span class="ban-date">До {{ ban_until }}</span></p>
+                    <p><strong>⚠️ Причина блокировки:</strong></p>
+                    <div class="ban-reason">{{ reason }}</div>
+                    <p><strong>💬 Сообщение от администратора:</strong></p>
+                    <div class="ban-message">{{ message }}</div>
+                </div>
+
+                <p style="color: #888; font-size: 0.85rem;">
+                    Если вы считаете, что это ошибка, свяжитесь с нами по почте 
+                    <a href="mailto:vaincode@mail.ru" class="contact-link">vaincode@mail.ru</a>
+                </p>
+
+                <button class="back-btn" onclick="window.location.href='/'">🔙 Вернуться на главную</button>
+            </div>
+        </body>
+        </html>
+        ''', ban_until=ban_info['ban_until'], reason=ban_info['reason'], message=ban_info['message'])
+    return redirect('/')
+
+
+# БЛОКИРОВКА ПРИ БАНЕ
+@app.before_request
+def check_ban():
+    if request.endpoint == 'static':
+        return None
+
+    if request.endpoint == 'ban_page':
+        return None
+
+    if 'user_email' in session:
+        is_banned, ban_until, ban_reason, ban_message = is_user_banned(session['user_email'])
+        if is_banned:
+            session.clear()
+            return redirect(f'/ban-page?email={session["user_email"]}')
+
+
+# ==================== API МАРШРУТЫ ДЛЯ ЧАТА-ПОМОЩНИКА ====================
+
+@app.route('/api/chat/send-operator-request', methods=['POST'])
+def send_operator_request():
+    if 'user_email' not in session:
+        return jsonify({'success': False, 'message': 'Не авторизован'}), 401
+
+    users = load_users()
+    user = users.get(session['user_email'], {})
+    user_name = user.get('full_name', 'Не указано')
+    user_phone = user.get('phone', 'Не указан')
+    user_email = session['user_email']
+
+    email_sent = send_operator_request_email(user_name, user_phone, user_email)
+
+    return jsonify({
+        'success': True,
+        'message': '✅ Заявка отправлена! Оператор свяжется с вами в ближайшее время.',
+        'email_sent': email_sent
+    })
+
+
+@app.route('/api/chat/send-payment-question', methods=['POST'])
+def send_payment_question():
+    if 'user_email' not in session:
+        return jsonify({'success': False, 'message': 'Не авторизован'}), 401
+
+    auto_response = "Доброго времени суток, наш дорогой клиент! В данный момент оплата принимается только за наличный расчёт или же перевод на карту. Онлайн оплата скоро появится. ЖДИТЕ НАШИХ НОВОСТЕЙ!"
+
+    return jsonify({
+        'success': True,
+        'response': auto_response
+    })
+
+
+@app.route('/api/chat/site-creation-time', methods=['POST'])
+def site_creation_time():
+    if 'user_email' not in session:
+        return jsonify({'success': False, 'message': 'Не авторизован'}), 401
+
+    response = "В среднем создание сайта уходит 1-2 недели, но если сайт не содержит в себе сложных элементов, то создание такого проекта сокращается вдвое!"
+
+    return jsonify({
+        'success': True,
+        'response': response
+    })
+
+
+@app.route('/api/chat/consultation', methods=['POST'])
+def consultation():
+    if 'user_email' not in session:
+        return jsonify({'success': False, 'message': 'Не авторизован'}), 401
+
+    data = request.json
+    choice = data.get('choice')
+
+    phones = {
+        'system_admin': '89836074115',
+        'director': '89520062357',
+        'manager': '89132447707'
+    }
+
+    names = {
+        'system_admin': 'Системный администратор',
+        'director': 'Генеральный директор',
+        'manager': 'Менеджер'
+    }
+
+    if choice in phones:
+        response = f"{names[choice]}: {phones[choice]}"
+    else:
+        response = "Пожалуйста, выберите одного из специалистов: Системный администратор, Генеральный директор или Менеджер."
+
+    return jsonify({
+        'success': True,
+        'response': response
+    })
+
+
+@app.route('/api/chat/cooperation', methods=['POST'])
+def cooperation():
+    if 'user_email' not in session:
+        return jsonify({'success': False, 'message': 'Не авторизован'}), 401
+
+    response = "По вопросам рекламы и сотрудничества пишите нам на почту vaincode@mail.ru или можете позвонить по номеру телефона 89520062357."
+
+    return jsonify({
+        'success': True,
+        'response': response
+    })
+
+
+# ==================== API ДЛЯ ВЛОГА И ПРЕДЛОЖЕНИЙ ====================
+
+@app.route('/api/vlog', methods=['GET'])
+def get_vlog():
+    vlog = load_vlog()
+    return jsonify(vlog)
+
+
+@app.route('/api/admin/update-vlog', methods=['POST'])
+def update_vlog():
+    if 'user_email' not in session or not is_admin(session['user_email']):
+        return jsonify({'error': 'Access denied'}), 403
+
+    data = request.json
+    text = data.get('text', '')
+
+    vlog = load_vlog()
+    vlog['text'] = text
+    save_vlog(vlog)
+
+    return jsonify({'success': True, 'message': 'Влог обновлён'})
+
+
+@app.route('/api/send-feedback', methods=['POST'])
+def send_feedback():
+    if 'user_email' not in session:
+        return jsonify({'success': False, 'message': 'Не авторизован'}), 401
+
+    data = request.json
+    message = data.get('message', '')
+
+    if not message:
+        return jsonify({'success': False, 'message': 'Введите сообщение'})
+
+    users = load_users()
+    user = users.get(session['user_email'], {})
+    user_name = user.get('full_name', 'Не указано')
+    user_phone = user.get('phone', 'Не указан')
+    user_email = session['user_email']
+
     try:
         msg = MIMEMultipart()
         msg['From'] = EMAIL_CONFIG['email']
@@ -1075,222 +1225,14 @@ def send_feedback_email(user_name, user_email, user_phone, message):
         server.login(EMAIL_CONFIG['email'], EMAIL_CONFIG['password'])
         server.send_message(msg)
         server.quit()
-        return True
+
+        return jsonify({'success': True, 'message': 'Сообщение отправлено! Спасибо за обратную связь.'})
     except Exception as e:
         print(f"Ошибка отправки: {e}")
-        return False
+        return jsonify({'success': False, 'message': 'Ошибка при отправке. Попробуйте позже.'})
 
 
-def calculate_distance(address):
-    address_lower = address.lower()
-    if 'барнаул' in address_lower:
-        return random.randint(1, 30)
-    elif 'новосибирск' in address_lower:
-        return random.randint(200, 250)
-    elif 'москва' in address_lower:
-        return random.randint(3000, 3500)
-    elif 'спб' in address_lower or 'санкт-петербург' in address_lower:
-        return random.randint(3500, 4000)
-    elif 'томск' in address_lower:
-        return random.randint(400, 450)
-    elif 'кемерово' in address_lower:
-        return random.randint(250, 300)
-    elif 'новокузнецк' in address_lower:
-        return random.randint(350, 400)
-    elif 'бийск' in address_lower:
-        return random.randint(150, 180)
-    elif 'рубцовск' in address_lower:
-        return random.randint(250, 280)
-    else:
-        return random.randint(100, 2000)
-
-
-def calculate_delivery_date(distance_km):
-    if distance_km <= 50:
-        days = 3
-        period_text = "3 дня"
-    elif distance_km <= 100:
-        days = 7
-        period_text = "7 дней"
-    else:
-        days = 14
-        period_text = "14 дней (2 недели)"
-    delivery_date = (datetime.now() + timedelta(days=days)).strftime('%d.%m.%Y')
-    return delivery_date, period_text
-
-
-def get_product_price(product):
-    if product.get('sale_price') and product['sale_price'] > 0 and product['sale_price'] < product['price']:
-        return product['sale_price']
-    return product['price']
-
-
-def generate_verification_code():
-    return str(random.randint(100000, 999999))
-
-
-def register_user(email, password, full_name, phone):
-    user = get_user_from_db(email)
-    if user:
-        return False, "Пользователь с таким email уже существует"
-
-    is_admin = (email.lower() == 'admin@zetta.ru')
-    save_user_to_db(email, password, full_name, phone, True, is_admin)
-    return True, "Регистрация успешна"
-
-
-def is_profile_complete(email):
-    user = get_user_from_db(email)
-    if user:
-        return user.get('profile_complete', False) and user.get('full_name') and user.get('phone')
-    return False
-
-
-def update_user_profile(email, full_name, phone):
-    update_user_profile_db(email, full_name, phone)
-    return True
-
-
-def is_admin(email):
-    user = get_user_from_db(email)
-    if user:
-        return user.get('is_admin', False)
-    return False
-
-
-def login_user(email, password):
-    user = get_user_from_db(email)
-
-    # Проверка бана
-    banned = get_banned_users()
-    if email in banned and datetime.now() < datetime.fromisoformat(banned[email]['ban_until']):
-        return False, f"Ваш аккаунт забанен до {datetime.fromisoformat(banned[email]['ban_until']).strftime('%d.%m.%Y %H:%M:%S')}. Причина: {banned[email]['reason']}"
-
-    if user and user['password'] == password:
-        session['user_email'] = email
-        session['user_name'] = user['full_name']
-        session['is_admin'] = user['is_admin']
-        return True, "Вход выполнен"
-    return False, "Неверный email или пароль"
-
-
-def get_banned_users():
-    return load_banned_users_from_db()
-
-
-def is_user_banned(email):
-    banned = get_banned_users()
-    if email in banned:
-        ban_until = datetime.fromisoformat(banned[email]['ban_until'])
-        if datetime.now() < ban_until:
-            return True, ban_until.strftime('%d.%m.%Y %H:%M:%S'), banned[email]['reason'], banned[email]['message']
-        else:
-            remove_banned_user_from_db(email)
-    return False, None, None, None
-
-
-def ban_user(email, duration_minutes, reason, message):
-    ban_until = datetime.now() + timedelta(minutes=duration_minutes)
-    add_banned_user_to_db(email, ban_until, duration_minutes, reason, message)
-
-
-def unban_user(email):
-    remove_banned_user_from_db(email)
-
-
-def get_user_unread_count(email):
-    return get_unread_count_db(email)
-
-
-def mark_chat_read(email):
-    mark_chat_messages_read_db(email)
-
-
-def get_daily_random_reviews():
-    reviews = load_reviews_from_db()
-    if len(reviews) == 0:
-        return []
-    today_seed = int(datetime.now().strftime('%Y%m%d'))
-    random.seed(today_seed)
-    shuffled = list(reviews)
-    random.shuffle(shuffled)
-    return shuffled[:3]
-
-
-# Инициализация БД
-init_db()
-
-
-@app.before_request
-def check_ban():
-    if request.endpoint == 'static':
-        return None
-    if 'user_email' in session:
-        is_banned, ban_until, ban_reason, ban_message = is_user_banned(session['user_email'])
-        if is_banned:
-            session.clear()
-            return redirect(f'/ban-page?email={session["user_email"]}')
-
-
-# Страница бана
-@app.route('/ban-page')
-def ban_page():
-    email = request.args.get('email', '')
-    banned = get_banned_users()
-    if email in banned:
-        ban_until = datetime.fromisoformat(banned[email]['ban_until']).strftime('%d.%m.%Y %H:%M:%S')
-        return render_template_string('''
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <meta charset="UTF-8">
-            <title>Аккаунт заблокирован</title>
-            <style>
-                * { margin: 0; padding: 0; box-sizing: border-box; }
-                body { background: linear-gradient(135deg, #0a0a0a 0%, #1a0a0a 100%); display: flex; justify-content: center; align-items: center; min-height: 100vh; font-family: 'Segoe UI', Arial, sans-serif; }
-                .ban-container { background: #1a1a1a; border: 1px solid #e74c3c; border-radius: 16px; padding: 2.5rem; max-width: 500px; margin: 20px; text-align: center; animation: fadeInUp 0.6s ease-out; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
-                @keyframes fadeInUp { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
-                @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.05); } 100% { transform: scale(1); } }
-                .ban-icon { font-size: 4rem; margin-bottom: 1rem; animation: pulse 1.5s ease-in-out infinite; }
-                .ban-title { font-size: 1.8rem; font-weight: bold; color: #e74c3c; margin-bottom: 1rem; }
-                .ban-subtitle { color: #888; margin-bottom: 1.5rem; font-size: 0.9rem; }
-                .ban-info { background: #0f0f0f; border-radius: 12px; padding: 1.5rem; text-align: left; margin-bottom: 1.5rem; border-left: 4px solid #e74c3c; }
-                .ban-info p { margin: 0.5rem 0; color: #bbb; }
-                .ban-info strong { color: #27ae60; }
-                .ban-reason { background: #2a1a1a; padding: 0.8rem; border-radius: 8px; margin: 0.5rem 0; color: #e74c3c; font-weight: bold; }
-                .ban-message { background: #1a2a1a; padding: 0.8rem; border-radius: 8px; margin: 0.5rem 0; color: #27ae60; font-style: italic; }
-                .ban-date { color: #f39c12; font-weight: bold; }
-                .contact-link { color: #27ae60; text-decoration: none; font-weight: bold; transition: all 0.3s ease; }
-                .contact-link:hover { text-decoration: underline; color: #229954; }
-                .back-btn { background: #27ae60; color: white; border: none; padding: 0.8rem 1.5rem; border-radius: 8px; cursor: pointer; font-size: 1rem; margin-top: 1rem; transition: all 0.3s ease; }
-                .back-btn:hover { background: #229954; transform: scale(1.02); }
-            </style>
-        </head>
-        <body>
-            <div class="ban-container">
-                <div class="ban-icon">🚫</div>
-                <div class="ban-title">ДОСТУП ЗАБЛОКИРОВАН</div>
-                <div class="ban-subtitle">Ваш аккаунт был заблокирован администрацией</div>
-                <div class="ban-info">
-                    <p><strong>📅 Дата блокировки:</strong> <span class="ban-date">До {{ ban_until }}</span></p>
-                    <p><strong>⚠️ Причина блокировки:</strong></p>
-                    <div class="ban-reason">{{ reason }}</div>
-                    <p><strong>💬 Сообщение от администратора:</strong></p>
-                    <div class="ban-message">{{ message }}</div>
-                </div>
-                <p style="color: #888; font-size: 0.85rem;">
-                    Если вы считаете, что это ошибка, свяжитесь с нами по почте 
-                    <a href="mailto:vaincode@mail.ru" class="contact-link">vaincode@mail.ru</a>
-                </p>
-                <button class="back-btn" onclick="window.location.href='/'">🔙 Вернуться на главную</button>
-            </div>
-        </body>
-        </html>
-        ''', ban_until=ban_until, reason=banned[email]['reason'], message=banned[email]['message'])
-    return redirect('/')
-
-
-# ==================== API МАРШРУТЫ ====================
+# ==================== API МАРШРУТЫ ДЛЯ АВТОРИЗАЦИИ ====================
 
 @app.route('/api/auth/status', methods=['GET'])
 def auth_status():
@@ -1300,18 +1242,16 @@ def auth_status():
             session.clear()
             return jsonify({'logged_in': False, 'is_admin': False, 'banned': True})
 
-        user = get_user_from_db(session['user_email'])
+        users = load_users()
+        user = users.get(session['user_email'], {})
         return jsonify({
             'logged_in': True,
             'user': {
                 'full_name': user.get('full_name', ''),
                 'email': user.get('email', ''),
                 'phone': user.get('phone', ''),
-                'registered_at': user['registered_at'].strftime('%d.%m.%Y %H:%M:%S') if user['registered_at'] else '',
-                'personal_discount': {
-                    'type': user.get('personal_discount_type'),
-                    'discount': user.get('personal_discount_value')
-                } if user.get('personal_discount_type') else None
+                'registered_at': user.get('registered_at', ''),
+                'personal_discount': user.get('personal_discount', None)
             },
             'is_admin': user.get('is_admin', False)
         })
@@ -1345,11 +1285,14 @@ def check_profile_complete():
 def update_profile():
     if 'user_email' not in session:
         return jsonify({'success': False, 'message': 'Не авторизован'})
+
     data = request.json
     full_name = data.get('full_name')
     phone = data.get('phone')
+
     if not full_name or not phone:
         return jsonify({'success': False, 'message': 'Заполните все поля'})
+
     if update_user_profile(session['user_email'], full_name, phone):
         session['user_name'] = full_name
         return jsonify({'success': True})
@@ -1360,18 +1303,21 @@ def update_profile():
 def send_reset_code():
     data = request.json
     email = data.get('email')
-    user = get_user_from_db(email)
-    if not user:
+
+    users = load_users()
+    email_lower = email.lower()
+    if email_lower not in users:
         return jsonify({'success': False, 'message': 'Пользователь с таким email не найден'})
 
     code = generate_verification_code()
     expires_at = (datetime.now() + timedelta(minutes=5)).timestamp()
-    save_password_reset_code_to_db(email, code, expires_at)
 
-    if send_verification_email(email, code, 'reset'):
+    save_password_reset(email_lower, code, expires_at)
+
+    if send_verification_email(email_lower, code, 'reset'):
         return jsonify({'success': True, 'message': 'Код восстановления отправлен на почту'})
     else:
-        delete_password_reset_code_from_db(email)
+        delete_password_reset(email_lower)
         return jsonify({'success': False, 'message': 'Ошибка при отправке письма'})
 
 
@@ -1382,20 +1328,26 @@ def reset_password():
     code = data.get('code')
     new_password = data.get('new_password')
 
-    reset_data = get_password_reset_code_from_db(email)
+    email_lower = email.lower()
+    reset_data = get_password_reset(email_lower)
     if not reset_data:
         return jsonify({'success': False, 'message': 'Код не найден. Запросите новый код.'})
 
     if datetime.now().timestamp() > reset_data['expires_at']:
-        delete_password_reset_code_from_db(email)
+        delete_password_reset(email_lower)
         return jsonify({'success': False, 'message': 'Срок действия кода истёк. Запросите новый.'})
 
     if reset_data['code'] != code:
         return jsonify({'success': False, 'message': 'Неверный код подтверждения'})
 
-    save_user_to_db(email, new_password, None, None, False, False)
-    delete_password_reset_code_from_db(email)
-    return jsonify({'success': True, 'message': 'Пароль успешно изменён'})
+    users = load_users()
+    if email_lower in users:
+        users[email_lower]['password'] = new_password
+        save_users(users)
+        delete_password_reset(email_lower)
+        return jsonify({'success': True, 'message': 'Пароль успешно изменён'})
+
+    return jsonify({'success': False, 'message': 'Пользователь не найден'})
 
 
 @app.route('/api/send-verification', methods=['POST'])
@@ -1406,18 +1358,27 @@ def send_verification():
     phone = data.get('phone')
     password = data.get('password')
 
-    user = get_user_from_db(email)
-    if user:
+    users = load_users()
+    email_lower = email.lower()
+    if email_lower in users:
         return jsonify({'success': False, 'message': 'Пользователь с таким email уже существует'})
 
     code = generate_verification_code()
     expires_at = (datetime.now() + timedelta(minutes=5)).timestamp()
-    save_verification_code_to_db(email, code, expires_at, full_name, phone, password)
 
-    if send_verification_email(email, code, 'registration'):
+    temp_data = {
+        'code': code,
+        'expires_at': expires_at,
+        'full_name': full_name,
+        'phone': phone,
+        'password': password
+    }
+    save_temp_registration(email_lower, temp_data)
+
+    if send_verification_email(email_lower, code, 'registration'):
         return jsonify({'success': True, 'message': 'Код подтверждения отправлен на почту'})
     else:
-        delete_verification_code_from_db(email)
+        delete_temp_registration(email_lower)
         return jsonify({'success': False, 'message': 'Ошибка при отправке письма. Попробуйте позже.'})
 
 
@@ -1427,20 +1388,22 @@ def verify_code():
     email = data.get('email')
     code = data.get('code')
 
-    temp_data = get_verification_code_from_db(email)
+    email_lower = email.lower()
+    temp_data = get_temp_registration(email_lower)
     if not temp_data:
         return jsonify({'success': False, 'message': 'Код не найден. Запросите новый код.'})
 
     if datetime.now().timestamp() > temp_data['expires_at']:
-        delete_verification_code_from_db(email)
+        delete_temp_registration(email_lower)
         return jsonify({'success': False, 'message': 'Срок действия кода истёк. Запросите новый.'})
 
     if temp_data['code'] != code:
         return jsonify({'success': False, 'message': 'Неверный код подтверждения'})
 
-    success, message = register_user(email, temp_data['password'], temp_data['full_name'], temp_data['phone'])
+    success, message = register_user(email_lower, temp_data['password'], temp_data['full_name'], temp_data['phone'])
+
     if success:
-        delete_verification_code_from_db(email)
+        delete_temp_registration(email_lower)
         return jsonify({'success': True, 'message': message})
     else:
         return jsonify({'success': False, 'message': message})
@@ -1451,16 +1414,20 @@ def resend_verification():
     data = request.json
     email = data.get('email')
 
-    temp_data = get_verification_code_from_db(email)
+    email_lower = email.lower()
+    temp_data = get_temp_registration(email_lower)
     if not temp_data:
         return jsonify({'success': False, 'message': 'Данные не найдены. Заполните форму регистрации заново.'})
 
     new_code = generate_verification_code()
-    expires_at = (datetime.now() + timedelta(minutes=5)).timestamp()
-    save_verification_code_to_db(email, new_code, expires_at, temp_data['full_name'], temp_data['phone'],
-                                 temp_data['password'])
+    temp_data['code'] = new_code
+    temp_data['expires_at'] = (datetime.now() + timedelta(minutes=5)).timestamp()
 
-    if send_verification_email(email, new_code, 'registration'):
+    temp_registrations = load_verification_codes()
+    temp_registrations[email_lower] = temp_data
+    save_verification_codes(temp_registrations)
+
+    if send_verification_email(email_lower, new_code, 'registration'):
         return jsonify({'success': True, 'message': 'Новый код отправлен на почту'})
     else:
         return jsonify({'success': False, 'message': 'Ошибка при отправке письма'})
@@ -1470,16 +1437,15 @@ def resend_verification():
 def get_user_profile():
     if 'user_email' not in session:
         return jsonify({'error': 'Not logged in'}), 401
-    user = get_user_from_db(session['user_email'])
+
+    users = load_users()
+    user = users.get(session['user_email'], {})
     return jsonify({
         'full_name': user.get('full_name', ''),
         'email': user.get('email', ''),
         'phone': user.get('phone', ''),
-        'registered_at': user['registered_at'].strftime('%d.%m.%Y %H:%M:%S') if user['registered_at'] else '',
-        'personal_discount': {
-            'type': user.get('personal_discount_type'),
-            'discount': user.get('personal_discount_value')
-        } if user.get('personal_discount_type') else None
+        'registered_at': user.get('registered_at', ''),
+        'personal_discount': user.get('personal_discount', None)
     })
 
 
@@ -1487,19 +1453,27 @@ def get_user_profile():
 def get_user_orders_api():
     if 'user_email' not in session:
         return jsonify([])
-    orders = get_user_orders_from_db(session['user_email'])
+
+    orders = get_user_orders(session['user_email'])
     return jsonify(orders)
 
 
 @app.route('/api/home-reviews', methods=['GET'])
 def get_home_reviews():
-    reviews = get_daily_random_reviews()
-    return jsonify(reviews)
+    reviews = load_reviews()
+    if len(reviews) == 0:
+        return jsonify([])
+
+    today_seed = int(datetime.now().strftime('%Y%m%d'))
+    random.seed(today_seed)
+    shuffled = reviews.copy()
+    random.shuffle(shuffled)
+    return jsonify(shuffled[:3])
 
 
 @app.route('/api/reviews', methods=['GET'])
 def get_reviews():
-    reviews = load_reviews_from_db()
+    reviews = load_reviews()
     return jsonify(reviews)
 
 
@@ -1507,12 +1481,21 @@ def get_reviews():
 def add_review():
     if 'user_email' not in session:
         return jsonify({'success': False, 'message': 'Не авторизован'})
+
     data = request.json
     name = data.get('name', 'Аноним')
     rating = data.get('rating', 5)
     text = data.get('text', '')
-    date = datetime.now().strftime('%d.%m.%Y %H:%M')
-    add_review_to_db(name, rating, text, date)
+
+    reviews = load_reviews()
+    reviews.insert(0, {
+        'name': name,
+        'rating': rating,
+        'text': text,
+        'date': datetime.now().strftime('%d.%m.%Y %H:%M')
+    })
+    save_reviews(reviews)
+
     return jsonify({'success': True})
 
 
@@ -1520,7 +1503,7 @@ def add_review():
 def get_products():
     search = request.args.get('search', '').lower()
     category = request.args.get('category', '')
-    products = load_products_from_db()
+    products = load_products()
 
     filtered = products
     if search:
@@ -1533,7 +1516,7 @@ def get_products():
 
 @app.route('/api/product/<int:product_id>')
 def get_product(product_id):
-    products = load_products_from_db()
+    products = load_products()
     product = next((p for p in products if p['id'] == product_id), None)
     return jsonify(product) if product else ('', 404)
 
@@ -1542,8 +1525,10 @@ def get_product(product_id):
 def calculate_delivery():
     data = request.json
     address = data.get('address', '')
+
     distance = calculate_distance(address)
     delivery_date, period_text = calculate_delivery_date(distance)
+
     return jsonify({
         'distance': distance,
         'delivery_period': period_text,
@@ -1593,21 +1578,23 @@ def apply_promo():
         return jsonify({'success': False, 'message': 'Войдите в аккаунт, чтобы использовать промокод'})
 
     user_email = session['user_email']
-    promocodes = load_promocodes_from_db()
-    user = get_user_from_db(user_email)
-    personal_discount = user.get('personal_discount_type')
+    promocodes = load_promocodes_list()
+
+    users = load_users()
+    user_data = users.get(user_email, {})
+    personal_discount = user_data.get('personal_discount', None)
 
     if promo_code == "PERSONAL_DISCOUNT" and personal_discount:
         session['promo_code'] = promo_code
         session['personal_discount_applied'] = True
-        discount_text = f"{user['personal_discount_value']}%" if user[
-                                                                     'personal_discount_type'] == 'percent' else f"{user['personal_discount_value']} ₽"
+        discount_text = f"{personal_discount['discount']}%" if personal_discount[
+                                                                   'type'] == 'percent' else f"{personal_discount['discount']} ₽"
         return jsonify({'success': True, 'discount_text': f"Персональная скидка: {discount_text}"})
 
-    if is_promocode_used_db(user_email, promo_code):
+    if is_promocode_used(user_email, promo_code):
         return jsonify({'success': False, 'message': 'Вы уже использовали этот промокод'})
 
-    if promo_code in promocodes and promocodes[promo_code]['active']:
+    if promo_code in promocodes and promocodes[promo_code].get('active', True):
         session['promo_code'] = promo_code
         promo_data = promocodes[promo_code]
         discount_text = f"{promo_data['discount']}%" if promo_data[
@@ -1622,8 +1609,9 @@ def get_cart():
     cart = session.get('cart', {})
     promo_code = session.get('promo_code')
     is_personal = session.get('personal_discount_applied', False)
-    products = load_products_from_db()
-    promocodes = load_promocodes_from_db()
+    products = load_products()
+    promocodes = load_promocodes_list()
+    users = load_users()
     user_email = session.get('user_email')
 
     items = []
@@ -1645,15 +1633,14 @@ def get_cart():
     discount = 0
     if promo_code:
         if is_personal and user_email:
-            user = get_user_from_db(user_email)
-            personal_discount_value = user.get('personal_discount_value')
-            personal_discount_type = user.get('personal_discount_type')
-            if personal_discount_value:
-                if personal_discount_type == 'percent':
-                    discount = subtotal * personal_discount_value / 100
+            user_data = users.get(user_email, {})
+            personal_discount = user_data.get('personal_discount', None)
+            if personal_discount:
+                if personal_discount['type'] == 'percent':
+                    discount = subtotal * personal_discount['discount'] / 100
                 else:
-                    discount = min(personal_discount_value, subtotal)
-        elif promo_code in promocodes and promocodes[promo_code]['active']:
+                    discount = min(personal_discount['discount'], subtotal)
+        elif promo_code in promocodes and promocodes[promo_code].get('active', True):
             promo = promocodes[promo_code]
             if promo['type'] == 'percent':
                 discount = subtotal * promo['discount'] / 100
@@ -1682,8 +1669,9 @@ def checkout_card():
     cart = session.get('cart', {})
     promo_code = session.get('promo_code')
     is_personal = session.get('personal_discount_applied', False)
-    products = load_products_from_db()
-    promocodes = load_promocodes_from_db()
+    products = load_products()
+    promocodes = load_promocodes_list()
+    users = load_users()
 
     distance = calculate_distance(delivery_address)
     delivery_date, period_text = calculate_delivery_date(distance)
@@ -1706,15 +1694,14 @@ def checkout_card():
     discount = 0
     if promo_code:
         if is_personal and session.get('user_email'):
-            user = get_user_from_db(session['user_email'])
-            personal_discount_value = user.get('personal_discount_value')
-            personal_discount_type = user.get('personal_discount_type')
-            if personal_discount_value:
-                if personal_discount_type == 'percent':
-                    discount = subtotal * personal_discount_value / 100
+            user_data = users.get(session['user_email'], {})
+            personal_discount = user_data.get('personal_discount', None)
+            if personal_discount:
+                if personal_discount['type'] == 'percent':
+                    discount = subtotal * personal_discount['discount'] / 100
                 else:
-                    discount = min(personal_discount_value, subtotal)
-        elif promo_code in promocodes and promocodes[promo_code]['active']:
+                    discount = min(personal_discount['discount'], subtotal)
+        elif promo_code in promocodes and promocodes[promo_code].get('active', True):
             promo = promocodes[promo_code]
             if promo['type'] == 'percent':
                 discount = subtotal * promo['discount'] / 100
@@ -1722,10 +1709,11 @@ def checkout_card():
                 discount = min(promo['discount'], subtotal)
 
     total = subtotal - discount
+
     order_number = f"{datetime.now().strftime('%Y%m%d')}{random.randint(1000, 9999)}"
 
     if promo_code and 'user_email' in session and not is_personal:
-        mark_promocode_used_db(session['user_email'], promo_code, order_number)
+        mark_promocode_used(session['user_email'], promo_code, order_number)
 
     order_data = {
         'order_number': order_number,
@@ -1746,7 +1734,7 @@ def checkout_card():
     }
 
     if 'user_email' in session:
-        save_order_to_db(session['user_email'], order_data)
+        save_order_to_history(session['user_email'], order_data)
 
     payment_log = {
         'order_number': order_number,
@@ -1764,6 +1752,16 @@ def checkout_card():
     with open('payments_log.txt', 'a', encoding='utf-8') as f:
         f.write(f"{json.dumps(payment_log, ensure_ascii=False)}\n")
 
+    print(f"\n💰 ОПЛАТА КАРТОЙ ЗАРЕГИСТРИРОВАНА!")
+    print(f"📦 Заказ #{order_number}")
+    print(f"👤 Клиент: {customer_name}")
+    print(f"📧 Email: {customer_email}")
+    print(f"💳 Сумма: {total:,} ₽")
+    print(f"📱 Счёт получателя: 89520062357 (Сбербанк)")
+    print(f"📍 Адрес: {delivery_address}")
+    print(f"📏 Расстояние: {distance} км")
+    print(f"🚚 Доставка: {period_text} (до {delivery_date})")
+
     email_sent = send_receipt_email(order_data)
 
     session.pop('cart', None)
@@ -1772,10 +1770,10 @@ def checkout_card():
 
     if email_sent:
         return jsonify({
-                           'message': f'✅ Заказ #{order_number} оплачен картой онлайн! Сумма {total:,} ₽ поступит на номер 89520062357. Чек отправлен на {customer_email}.'})
+            'message': f'✅ Заказ #{order_number} оплачен картой онлайн! Сумма {total:,} ₽ поступит на номер 89520062357. Чек отправлен на {customer_email}.'})
     else:
         return jsonify({
-                           'message': f'✅ Заказ #{order_number} оплачен картой онлайн! Сумма {total:,} ₽ поступит на номер 89520062357.'})
+            'message': f'✅ Заказ #{order_number} оплачен картой онлайн! Сумма {total:,} ₽ поступит на номер 89520062357.'})
 
 
 @app.route('/api/checkout-cash', methods=['POST'])
@@ -1789,8 +1787,9 @@ def checkout_cash():
     cart = session.get('cart', {})
     promo_code = session.get('promo_code')
     is_personal = session.get('personal_discount_applied', False)
-    products = load_products_from_db()
-    promocodes = load_promocodes_from_db()
+    products = load_products()
+    promocodes = load_promocodes_list()
+    users = load_users()
 
     distance = calculate_distance(delivery_address)
     delivery_date, period_text = calculate_delivery_date(distance)
@@ -1813,15 +1812,14 @@ def checkout_cash():
     discount = 0
     if promo_code:
         if is_personal and session.get('user_email'):
-            user = get_user_from_db(session['user_email'])
-            personal_discount_value = user.get('personal_discount_value')
-            personal_discount_type = user.get('personal_discount_type')
-            if personal_discount_value:
-                if personal_discount_type == 'percent':
-                    discount = subtotal * personal_discount_value / 100
+            user_data = users.get(session['user_email'], {})
+            personal_discount = user_data.get('personal_discount', None)
+            if personal_discount:
+                if personal_discount['type'] == 'percent':
+                    discount = subtotal * personal_discount['discount'] / 100
                 else:
-                    discount = min(personal_discount_value, subtotal)
-        elif promo_code in promocodes and promocodes[promo_code]['active']:
+                    discount = min(personal_discount['discount'], subtotal)
+        elif promo_code in promocodes and promocodes[promo_code].get('active', True):
             promo = promocodes[promo_code]
             if promo['type'] == 'percent':
                 discount = subtotal * promo['discount'] / 100
@@ -1829,10 +1827,11 @@ def checkout_cash():
                 discount = min(promo['discount'], subtotal)
 
     total = subtotal - discount
+
     order_number = f"{datetime.now().strftime('%Y%m%d')}{random.randint(1000, 9999)}"
 
     if promo_code and 'user_email' in session and not is_personal:
-        mark_promocode_used_db(session['user_email'], promo_code, order_number)
+        mark_promocode_used(session['user_email'], promo_code, order_number)
 
     order_data = {
         'order_number': order_number,
@@ -1853,7 +1852,7 @@ def checkout_cash():
     }
 
     if 'user_email' in session:
-        save_order_to_db(session['user_email'], order_data)
+        save_order_to_history(session['user_email'], order_data)
 
     order_log = {
         'order_number': order_number,
@@ -1870,6 +1869,15 @@ def checkout_cash():
     with open('orders_log.txt', 'a', encoding='utf-8') as f:
         f.write(f"{json.dumps(order_log, ensure_ascii=False)}\n")
 
+    print(f"\n💰 ЗАКАЗ НАЛИЧНЫМИ ОФОРМЛЕН!")
+    print(f"📦 Заказ #{order_number}")
+    print(f"👤 Клиент: {customer_name}")
+    print(f"📧 Email: {customer_email}")
+    print(f"💵 Сумма к оплате при получении: {total:,} ₽")
+    print(f"📍 Адрес доставки: {delivery_address}")
+    print(f"📏 Расстояние: {distance} км")
+    print(f"🚚 Доставка: {period_text} (до {delivery_date})")
+
     email_sent = send_receipt_email(order_data)
 
     session.pop('cart', None)
@@ -1878,7 +1886,7 @@ def checkout_cash():
 
     if email_sent:
         return jsonify({
-                           'message': f'✅ Заказ #{order_number} оформлен! Оплата {total:,} ₽ наличными при получении. Чек отправлен на {customer_email}.'})
+            'message': f'✅ Заказ #{order_number} оформлен! Оплата {total:,} ₽ наличными при получении. Чек отправлен на {customer_email}.'})
     else:
         return jsonify({'message': f'✅ Заказ #{order_number} оформлен! Оплата {total:,} ₽ наличными при получении.'})
 
@@ -1889,7 +1897,7 @@ def checkout_cash():
 def admin_get_products():
     if 'user_email' not in session or not is_admin(session['user_email']):
         return jsonify({'error': 'Access denied'}), 403
-    products = load_products_from_db()
+    products = load_products()
     return jsonify(products)
 
 
@@ -1906,7 +1914,7 @@ def admin_add_product():
     category = request.form.get('category', 'services')
     image = request.files.get('image')
 
-    products = load_products_from_db()
+    products = load_products()
     new_id = max([p['id'] for p in products]) + 1 if products else 1
 
     image_path = '/static/uploads/default.jpg'
@@ -1926,7 +1934,17 @@ def admin_add_product():
     elif discount_percent_val > 0 and int(price) > 0:
         sale_price_val = int(int(price) * (1 - discount_percent_val / 100))
 
-    add_product_to_db(name, int(price), sale_price_val, discount_percent_val, description, image_path, category)
+    products.append({
+        'id': new_id,
+        'name': name,
+        'price': int(price),
+        'sale_price': sale_price_val,
+        'discount_percent': discount_percent_val,
+        'description': description,
+        'image': image_path,
+        'category': category
+    })
+    save_products(products)
     return jsonify({'success': True})
 
 
@@ -1944,7 +1962,17 @@ def admin_edit_product():
     description = data.get('description')
     category = data.get('category', 'services')
 
-    update_product_in_db(product_id, name, price, sale_price, discount_percent, description, category)
+    products = load_products()
+    for p in products:
+        if p['id'] == product_id:
+            p['name'] = name
+            p['price'] = price
+            p['sale_price'] = sale_price if sale_price and sale_price > 0 else None
+            p['discount_percent'] = discount_percent or 0
+            p['description'] = description
+            p['category'] = category
+            break
+    save_products(products)
     return jsonify({'success': True})
 
 
@@ -1955,13 +1983,16 @@ def admin_delete_product():
 
     data = request.json
     product_id = data.get('id')
-    delete_product_from_db(product_id)
+
+    products = load_products()
+    products = [p for p in products if p['id'] != product_id]
+    save_products(products)
     return jsonify({'success': True})
 
 
 @app.route('/api/admin/news', methods=['GET'])
 def admin_get_news():
-    news = load_news_from_db()
+    news = load_news()
     return jsonify(news)
 
 
@@ -1975,15 +2006,25 @@ def admin_add_news():
     fullText = request.form.get('fullText')
     image = request.files.get('image')
 
-    date = datetime.now().strftime('%d.%m.%Y')
+    news = load_news()
+    new_id = max([n['id'] for n in news]) + 1 if news else 1
+
     image_path = '/static/uploads/default_news.jpg'
     if image:
-        filename = secure_filename(f"news_{int(datetime.now().timestamp())}_{image.filename}")
+        filename = secure_filename(f"news_{new_id}_{image.filename}")
         filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         image.save(filepath)
         image_path = f'/static/uploads/{filename}'
 
-    add_news_to_db(date, title, text, fullText, image_path)
+    news.append({
+        'id': new_id,
+        'date': datetime.now().strftime('%d.%m.%Y'),
+        'title': title,
+        'text': text,
+        'fullText': fullText,
+        'image': image_path
+    })
+    save_news(news)
     return jsonify({'success': True})
 
 
@@ -1998,7 +2039,14 @@ def admin_edit_news():
     text = data.get('text')
     fullText = data.get('fullText')
 
-    update_news_in_db(news_id, title, text, fullText)
+    news = load_news()
+    for n in news:
+        if n['id'] == news_id:
+            n['title'] = title
+            n['text'] = text
+            n['fullText'] = fullText
+            break
+    save_news(news)
     return jsonify({'success': True})
 
 
@@ -2009,7 +2057,10 @@ def admin_delete_news():
 
     data = request.json
     news_id = data.get('id')
-    delete_news_from_db(news_id)
+
+    news = load_news()
+    news = [n for n in news if n['id'] != news_id]
+    save_news(news)
     return jsonify({'success': True})
 
 
@@ -2017,13 +2068,13 @@ def admin_delete_news():
 def admin_get_promocodes():
     if 'user_email' not in session or not is_admin(session['user_email']):
         return jsonify({'error': 'Access denied'}), 403
-    promocodes = load_promocodes_from_db()
+    promocodes = load_promocodes_list()
     return jsonify(promocodes)
 
 
 @app.route('/api/promocodes', methods=['GET'])
 def get_promocodes():
-    promocodes = load_promocodes_from_db()
+    promocodes = load_promocodes_list()
     return jsonify(promocodes)
 
 
@@ -2040,7 +2091,16 @@ def admin_add_promocode():
     if not code or not discount:
         return jsonify({'success': False, 'message': 'Заполните все поля'})
 
-    add_promocode_to_db(code, discount, type)
+    promocodes = load_promocodes_list()
+    if code in promocodes:
+        return jsonify({'success': False, 'message': 'Промокод с таким кодом уже существует'})
+
+    promocodes[code] = {
+        'discount': discount,
+        'type': type,
+        'active': True
+    }
+    save_promocodes_list(promocodes)
     return jsonify({'success': True})
 
 
@@ -2052,11 +2112,11 @@ def admin_toggle_promocode():
     data = request.json
     code = data.get('code', '').upper()
 
-    promocodes = load_promocodes_from_db()
+    promocodes = load_promocodes_list()
     if code in promocodes:
-        new_status = not promocodes[code]['active']
-        toggle_promocode_in_db(code, new_status)
-        status = 'включён' if new_status else 'отключён'
+        promocodes[code]['active'] = not promocodes[code]['active']
+        save_promocodes_list(promocodes)
+        status = 'включён' if promocodes[code]['active'] else 'отключён'
         return jsonify({'success': True, 'message': f'Промокод {code} {status}'})
     return jsonify({'success': False, 'message': 'Промокод не найден'})
 
@@ -2068,8 +2128,13 @@ def admin_delete_promocode():
 
     data = request.json
     code = data.get('code', '').upper()
-    delete_promocode_from_db(code)
-    return jsonify({'success': True})
+
+    promocodes = load_promocodes_list()
+    if code in promocodes:
+        del promocodes[code]
+        save_promocodes_list(promocodes)
+        return jsonify({'success': True})
+    return jsonify({'success': False, 'message': 'Промокод не найден'})
 
 
 @app.route('/api/admin/delete-review', methods=['POST'])
@@ -2078,16 +2143,21 @@ def admin_delete_review():
         return jsonify({'error': 'Access denied'}), 403
 
     data = request.json
-    review_id = data.get('id')
-    delete_review_from_db(review_id)
-    return jsonify({'success': True})
+    index = data.get('index')
+
+    reviews = load_reviews()
+    if 0 <= index < len(reviews):
+        reviews.pop(index)
+        save_reviews(reviews)
+        return jsonify({'success': True})
+    return jsonify({'success': False, 'message': 'Отзыв не найден'})
 
 
 @app.route('/api/admin/orders', methods=['GET'])
 def admin_get_orders():
     if 'user_email' not in session or not is_admin(session['user_email']):
         return jsonify({'error': 'Access denied'}), 403
-    orders = load_orders_from_db()
+    orders = load_orders()
     return jsonify(orders)
 
 
@@ -2095,8 +2165,9 @@ def admin_get_orders():
 def admin_get_users():
     if 'user_email' not in session or not is_admin(session['user_email']):
         return jsonify({'error': 'Access denied'}), 403
-    users = load_users_from_db()
-    return jsonify(users)
+    users = load_users()
+    safe_users = {email: {k: v for k, v in data.items() if k != 'password'} for email, data in users.items()}
+    return jsonify(safe_users)
 
 
 @app.route('/api/admin/make-admin', methods=['POST'])
@@ -2106,19 +2177,14 @@ def admin_make_admin():
 
     data = request.json
     email = data.get('email')
-    update_user_admin_status(email, True)
-    return jsonify({'success': True})
 
-
-@app.route('/api/admin/remove-admin', methods=['POST'])
-def admin_remove_admin():
-    if 'user_email' not in session or not is_admin(session['user_email']):
-        return jsonify({'error': 'Access denied'}), 403
-
-    data = request.json
-    email = data.get('email')
-    update_user_admin_status(email, False)
-    return jsonify({'success': True})
+    users = load_users()
+    email_lower = email.lower()
+    if email_lower in users:
+        users[email_lower]['is_admin'] = True
+        save_users(users)
+        return jsonify({'success': True})
+    return jsonify({'success': False, 'message': 'Пользователь не найден'})
 
 
 @app.route('/api/admin/ban-user', methods=['POST'])
@@ -2135,12 +2201,22 @@ def ban_user_route():
     if not email or not duration_minutes:
         return jsonify({'success': False, 'message': 'Не указан email или срок бана'})
 
-    ban_user(email, duration_minutes, reason, message)
+    banned_users = load_banned_users()
+    ban_until = datetime.now() + timedelta(minutes=duration_minutes)
+
+    banned_users[email.lower()] = {
+        'banned_at': datetime.now().isoformat(),
+        'ban_until': ban_until.isoformat(),
+        'duration_minutes': duration_minutes,
+        'reason': reason,
+        'message': message
+    }
+
+    save_banned_users(banned_users)
 
     if 'user_email' in session and session['user_email'].lower() == email.lower():
         session.clear()
 
-    ban_until = datetime.now() + timedelta(minutes=duration_minutes)
     return jsonify(
         {'success': True, 'message': f'Пользователь {email} забанен до {ban_until.strftime("%d.%m.%Y %H:%M:%S")}'})
 
@@ -2152,8 +2228,17 @@ def unban_user_route():
 
     data = request.json
     email = data.get('email')
-    unban_user(email)
-    return jsonify({'success': True, 'message': f'Бан снят с {email}'})
+
+    if not email:
+        return jsonify({'success': False, 'message': 'Не указан email'})
+
+    banned_users = load_banned_users()
+    if email.lower() in banned_users:
+        del banned_users[email.lower()]
+        save_banned_users(banned_users)
+        return jsonify({'success': True, 'message': f'Бан снят с {email}'})
+
+    return jsonify({'success': False, 'message': 'Пользователь не забанен'})
 
 
 @app.route('/api/admin/set-personal-discount', methods=['POST'])
@@ -2169,7 +2254,19 @@ def set_personal_discount():
     if not user_email or not discount_type or discount_value is None:
         return jsonify({'success': False, 'message': 'Заполните все поля'})
 
-    set_personal_discount_db(user_email, discount_type, discount_value)
+    users = load_users()
+    user_email_lower = user_email.lower()
+
+    if user_email_lower not in users:
+        return jsonify({'success': False, 'message': 'Пользователь не найден'})
+
+    users[user_email_lower]['personal_discount'] = {
+        'type': discount_type,
+        'discount': discount_value,
+        'active': True
+    }
+    save_users(users)
+
     return jsonify({'success': True, 'message': f'Персональная скидка установлена для {user_email}'})
 
 
@@ -2184,122 +2281,23 @@ def remove_personal_discount():
     if not user_email:
         return jsonify({'success': False, 'message': 'Не указан email'})
 
-    remove_personal_discount_db(user_email)
-    return jsonify({'success': True, 'message': 'Персональная скидка удалена'})
+    users = load_users()
+    user_email_lower = user_email.lower()
+
+    if user_email_lower in users:
+        users[user_email_lower]['personal_discount'] = None
+        save_users(users)
+        return jsonify({'success': True, 'message': 'Персональная скидка удалена'})
+
+    return jsonify({'success': False, 'message': 'Пользователь не найден'})
 
 
-@app.route('/api/chat/send-operator-request', methods=['POST'])
-def send_operator_request():
-    if 'user_email' not in session:
-        return jsonify({'success': False, 'message': 'Не авторизован'}), 401
-
-    user = get_user_from_db(session['user_email'])
-    user_name = user.get('full_name', 'Не указано')
-    user_phone = user.get('phone', 'Не указан')
-    user_email = session['user_email']
-
-    email_sent = send_operator_request_email(user_name, user_phone, user_email)
-    return jsonify({'success': True, 'message': '✅ Заявка отправлена! Оператор свяжется с вами в ближайшее время.',
-                    'email_sent': email_sent})
-
-
-@app.route('/api/chat/send-payment-question', methods=['POST'])
-def send_payment_question():
-    if 'user_email' not in session:
-        return jsonify({'success': False, 'message': 'Не авторизован'}), 401
-    return jsonify({'success': True,
-                    'response': 'Доброго времени суток, наш дорогой клиент! В данный момент оплата принимается только за наличный расчёт или же перевод на карту. Онлайн оплата скоро появится. ЖДИТЕ НАШИХ НОВОСТЕЙ!'})
-
-
-@app.route('/api/chat/site-creation-time', methods=['POST'])
-def site_creation_time():
-    if 'user_email' not in session:
-        return jsonify({'success': False, 'message': 'Не авторизован'}), 401
-    return jsonify({'success': True,
-                    'response': 'В среднем создание сайта уходит 1-2 недели, но если сайт не содержит в себе сложных элементов, то создание такого проекта сокращается вдвое!'})
-
-
-@app.route('/api/chat/consultation', methods=['POST'])
-def consultation():
-    if 'user_email' not in session:
-        return jsonify({'success': False, 'message': 'Не авторизован'}), 401
-
-    data = request.json
-    choice = data.get('choice')
-
-    phones = {
-        'system_admin': '89836074115',
-        'director': '89520062357',
-        'manager': '89132447707'
-    }
-    names = {
-        'system_admin': 'Системный администратор',
-        'director': 'Генеральный директор',
-        'manager': 'Менеджер'
-    }
-
-    if choice in phones:
-        response = f"{names[choice]}: {phones[choice]}"
-    else:
-        response = "Пожалуйста, выберите одного из специалистов: Системный администратор, Генеральный директор или Менеджер."
-
-    return jsonify({'success': True, 'response': response})
-
-
-@app.route('/api/chat/cooperation', methods=['POST'])
-def cooperation():
-    if 'user_email' not in session:
-        return jsonify({'success': False, 'message': 'Не авторизован'}), 401
-    return jsonify({'success': True,
-                    'response': 'По вопросам рекламы и сотрудничества пишите нам на почту vaincode@mail.ru или можете позвонить по номеру телефона 89520062357.'})
-
-
-@app.route('/api/vlog', methods=['GET'])
-def get_vlog():
-    vlog = load_vlog_from_db()
-    return jsonify(vlog)
-
-
-@app.route('/api/admin/update-vlog', methods=['POST'])
-def update_vlog():
-    if 'user_email' not in session or not is_admin(session['user_email']):
-        return jsonify({'error': 'Access denied'}), 403
-
-    data = request.json
-    text = data.get('text', '')
-    update_vlog_in_db(text)
-    return jsonify({'success': True, 'message': 'Влог обновлён'})
-
-
-@app.route('/api/send-feedback', methods=['POST'])
-def send_feedback():
-    if 'user_email' not in session:
-        return jsonify({'success': False, 'message': 'Не авторизован'}), 401
-
-    data = request.json
-    message = data.get('message', '')
-
-    if not message:
-        return jsonify({'success': False, 'message': 'Введите сообщение'})
-
-    user = get_user_from_db(session['user_email'])
-    user_name = user.get('full_name', 'Не указано')
-    user_phone = user.get('phone', 'Не указан')
-    user_email = session['user_email']
-
-    email_sent = send_feedback_email(user_name, user_email, user_phone, message)
-    if email_sent:
-        return jsonify({'success': True, 'message': 'Сообщение отправлено! Спасибо за обратную связь.'})
-    else:
-        return jsonify({'success': False, 'message': 'Ошибка при отправке. Попробуйте позже.'})
-
-
-# HTML ТЕМПЛЕЙТ (ПОЛНЫЙ, БОЛЕЕ 5000 СТРОК HTML)
+# ГЛАВНАЯ СТРАНИЦА (HTML с анимацией молнии и глазиками)
 HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Zetta | Профессиональная сборка ПК и IT-услуги</title>
     <style>
         * {
@@ -2501,103 +2499,6 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
             transform: scale(1.02);
         }
 
-        /* ==================== МОБИЛЬНОЕ МЕНЮ (выезжающее) ==================== */
-        .mobile-menu-toggle {
-            display: none;
-            background: none;
-            border: none;
-            color: #27ae60;
-            font-size: 1.8rem;
-            cursor: pointer;
-            padding: 0.5rem;
-            transition: all 0.3s ease;
-            z-index: 1002;
-        }
-
-        .mobile-menu-toggle:hover {
-            transform: scale(1.1);
-        }
-
-        .mobile-menu-overlay {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.8);
-            z-index: 1003;
-            opacity: 0;
-            transition: opacity 0.3s ease;
-        }
-
-        .mobile-menu-overlay.active {
-            display: block;
-            opacity: 1;
-        }
-
-        .mobile-menu {
-            position: fixed;
-            top: 0;
-            left: -280px;
-            width: 280px;
-            height: 100%;
-            background: #0a0a0a;
-            z-index: 1004;
-            transition: left 0.3s ease;
-            box-shadow: 2px 0 10px rgba(0,0,0,0.5);
-            padding: 1rem;
-            overflow-y: auto;
-        }
-
-        .mobile-menu.open {
-            left: 0;
-        }
-
-        .mobile-menu-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding-bottom: 1rem;
-            border-bottom: 1px solid #2a2a2a;
-            margin-bottom: 1rem;
-        }
-
-        .mobile-menu-header h3 {
-            color: #27ae60;
-            font-size: 1.2rem;
-        }
-
-        .mobile-menu-close {
-            background: none;
-            border: none;
-            color: #888;
-            font-size: 1.5rem;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-
-        .mobile-menu-close:hover {
-            color: #e74c3c;
-            transform: scale(1.1);
-        }
-
-        .mobile-nav-link {
-            display: block;
-            padding: 0.8rem 0;
-            color: #e0e0e0;
-            text-decoration: none;
-            font-size: 1rem;
-            transition: all 0.3s ease;
-            border-bottom: 1px solid #2a2a2a;
-        }
-
-        .mobile-nav-link:hover {
-            color: #27ae60;
-            padding-left: 0.5rem;
-        }
-
-        /* ==================== ХЕДЕР ==================== */
         .header {
             background: #0a0a0a;
             border-bottom: 1px solid #2a2a2a;
@@ -2615,122 +2516,6 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
             align-items: center;
             flex-wrap: wrap;
             gap: 1rem;
-        }
-
-        /* Адаптив для телефона */
-        @media (max-width: 768px) {
-            .header-content {
-                position: relative;
-                justify-content: center;
-            }
-            .mobile-menu-toggle {
-                display: block;
-                position: absolute;
-                left: 1rem;
-                top: 50%;
-                transform: translateY(-50%);
-            }
-            .nav-links {
-                display: none;
-            }
-            .logo {
-                margin: 0 auto;
-            }
-            .user-icon {
-                position: absolute;
-                right: 4rem;
-                top: 50%;
-                transform: translateY(-50%);
-            }
-            .cart-icon {
-                position: absolute;
-                right: 1rem;
-                top: 50%;
-                transform: translateY(-50%);
-            }
-            .products-grid {
-                grid-template-columns: 1fr !important;
-            }
-            .team-grid {
-                grid-template-columns: 1fr !important;
-            }
-            .catalog-page-wrapper {
-                flex-direction: column;
-            }
-            .catalog-sidebar {
-                width: 100%;
-                position: static;
-            }
-            .contacts-grid {
-                grid-template-columns: 1fr !important;
-            }
-            .footer-content {
-                flex-direction: column;
-                text-align: center;
-            }
-            .footer-section {
-                flex-wrap: wrap;
-                justify-content: center;
-            }
-            .cart-panel {
-                width: 100% !important;
-                right: -100% !important;
-            }
-            .payment-methods {
-                flex-direction: column;
-            }
-            .home-reviews-grid {
-                grid-template-columns: 1fr;
-            }
-            .chat-window {
-                width: 90%;
-                right: 5%;
-                left: 5%;
-                bottom: 95px;
-                height: 450px;
-            }
-            .chat-button {
-                bottom: 15px;
-                right: 15px;
-                width: 50px;
-                height: 50px;
-                font-size: 20px;
-            }
-            .search-bar-full {
-                padding: 0.5rem 1rem;
-            }
-            .hero h1 {
-                font-size: 1.5rem;
-            }
-            .hero {
-                padding: 2rem 1rem;
-            }
-            .container {
-                padding: 1rem;
-            }
-            .admin-tabs {
-                gap: 0.5rem;
-            }
-            .admin-tab {
-                font-size: 0.7rem;
-                padding: 0.3rem 0.5rem;
-            }
-            .admin-user-actions {
-                flex-direction: column;
-                align-items: stretch;
-            }
-            .admin-user-actions select,
-            .admin-user-actions input,
-            .admin-user-actions button {
-                width: 100%;
-                margin: 0.2rem 0;
-            }
-        }
-
-        @media (min-width: 769px) {
-            .mobile-menu-toggle, .mobile-menu, .mobile-menu-overlay {
-                display: none !important;
-            }
         }
 
         .logo {
@@ -2988,7 +2773,6 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
             border: 1px solid #2a2a2a;
             padding: 1.5rem;
             margin-bottom: 2rem;
-            border-radius: 12px;
         }
 
         .admin-tabs {
@@ -5271,23 +5055,6 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
     </style>
 </head>
 <body>
-    <!-- Мобильное меню (выезжающее) -->
-    <button class="mobile-menu-toggle" onclick="toggleMobileMenu()">☰</button>
-    <div class="mobile-menu-overlay" onclick="closeMobileMenu()"></div>
-    <div class="mobile-menu" id="mobileMenu">
-        <div class="mobile-menu-header">
-            <h3>Меню</h3>
-            <button class="mobile-menu-close" onclick="closeMobileMenu()">×</button>
-        </div>
-        <div class="mobile-nav-link" onclick="closeMobileMenu(); goToHome()">🏠 Главная</div>
-        <div class="mobile-nav-link" onclick="closeMobileMenu(); goToCatalog()">📦 Каталог</div>
-        <div class="mobile-nav-link" onclick="closeMobileMenu(); goToReviews()">⭐ Отзывы</div>
-        <div class="mobile-nav-link" onclick="closeMobileMenu(); goToContacts()">📞 Контакты</div>
-        <div class="mobile-nav-link" onclick="closeMobileMenu(); showInfoPage()">ℹ️ Информация</div>
-        <div class="mobile-nav-link" id="mobileAdminLink" onclick="closeMobileMenu(); goToAdminPanel()" style="display:none">👑 Админ-панель</div>
-        <div class="mobile-nav-link" id="mobileProfileLink" onclick="closeMobileMenu(); goToProfile()" style="display:none">👤 Профиль</div>
-    </div>
-
     <div class="header">
         <div class="header-content">
             <div class="logo" onclick="goToHome()">
@@ -5980,7 +5747,6 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
     </div>
 
     <script>
-        // ==================== ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ====================
         let currentProduct = null;
         let currentPage = 'home';
         let selectedPayment = null;
@@ -5999,20 +5765,6 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
         let newsData = [];
         let currentCategory = 'all';
         let currentSearchTerm = '';
-
-        // ==================== МОБИЛЬНОЕ МЕНЮ ====================
-        function toggleMobileMenu() {
-            const menu = document.getElementById('mobileMenu');
-            const overlay = document.querySelector('.mobile-menu-overlay');
-            menu.classList.toggle('open');
-            overlay.classList.toggle('active');
-        }
-        function closeMobileMenu() {
-            const menu = document.getElementById('mobileMenu');
-            const overlay = document.querySelector('.mobile-menu-overlay');
-            menu.classList.remove('open');
-            overlay.classList.remove('active');
-        }
 
         // Функция для переключения видимости пароля
         function togglePasswordVisibility(inputId) {
@@ -7112,7 +6864,6 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
                                     </div>
                                     <div class="admin-user-actions">
                                         ${!u.is_admin ? `<button class="edit-btn" onclick="makeAdmin('${u.email}')">Сделать админом</button>` : ''}
-                                        ${u.is_admin ? `<button class="delete-btn" onclick="removeAdmin('${u.email}')">Удалить из админов</button>` : ''}
                                         <select id="${banSelectId}" class="ban-select">
                                             <option value="">Забанить</option>
                                             <option value="1">На 1 минуту</option>
@@ -7146,26 +6897,6 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
                 }).then(res => res.json()).then(data => {
                     if (data.success) {
                         alert('Пользователь стал администратором');
-                        loadAdminUsers();
-                        if (email === currentUser?.email) {
-                            checkAuthStatus();
-                        }
-                    } else {
-                        alert(data.message);
-                    }
-                });
-            }
-        }
-
-        function removeAdmin(email) {
-            if (confirm(`Снять права администратора с ${email}?`)) {
-                fetch('/api/admin/remove-admin', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({email: email})
-                }).then(res => res.json()).then(data => {
-                    if (data.success) {
-                        alert('Права администратора сняты');
                         loadAdminUsers();
                         if (email === currentUser?.email) {
                             checkAuthStatus();
@@ -8377,7 +8108,14 @@ HTML_TEMPLATE = '''{% raw %}<!DOCTYPE html>
         goToHome();
     </script>
 </body>
-</html>{% endraw %}'''
+</html>{% endraw %}
+'''
+
+
+# ВАЖНО: Вызываем инициализацию админа ПРИ КАЖДОМ ЗАПРОСЕ (на случай, если файл удалили)
+@app.before_request
+def init_admin():
+    init_admin_on_first_request()
 
 
 @app.route('/')
@@ -8386,18 +8124,10 @@ def index():
 
 
 if __name__ == '__main__':
+    # При локальном запуске тоже создаём админа
+    init_admin_on_first_request()
+
     port = int(os.environ.get('PORT', 5000))
     host = '0.0.0.0'
-    print("=" * 60)
-    print("ЗАПУСК СЕРВЕРА ZETTA")
-    print("=" * 60)
-    print(f"Сервер запущен на http://{host}:{port}")
-    print("-" * 60)
-    print("АДМИН АККАУНТ ДЛЯ ВХОДА:")
-    print("  Email: admin@zetta.ru")
-    print("  Пароль: admin123")
-    print("-" * 60)
-    print("База данных PostgreSQL подключена")
-    print("Все таблицы созданы автоматически")
-    print("=" * 60)
+    print(f"Запуск сервера на {host}:{port}")
     app.run(host=host, port=port, debug=False)
