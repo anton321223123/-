@@ -17,7 +17,7 @@ app.secret_key = 'secret_key_for_zetta_12345_secure_2026'
 app.config['UPLOAD_FOLDER'] = 'static/uploads'
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 
-# Создаем папку для загрузок
+# Создаем папку для загрузокк
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 # Конфигурация PostgreSQL
